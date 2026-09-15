@@ -1,0 +1,36 @@
+# ===== 环境变量与密钥（绝不入库）=====
+.env
+.env.local
+.env.*.local
+# 模板文件保留（里面只有占位符）
+!.env.example
+
+# ===== 证书与私钥（绝不入库）=====
+*.key
+*.pem
+*.crt
+*.csr
+blueakaiwu.cn_nginx/
+
+# ===== 用户上传数据（含真实用户照片，涉及隐私 + 体积大，绝不入库）=====
+data/
+
+# ===== 图鉴源图（体积大，另行分发）=====
+pictorial book/
+
+# ===== Python 依赖与缓存 =====
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# ===== 工具 / 编辑器本机配置 =====
+.claude/
+.idea/
+.vscode/
+*.swp
+
+# ===== 日志与临时文件 =====
+*.log
+*.tmp
