@@ -41,6 +41,14 @@ SKIP_PREFIX = "_"
 # 不能走网络，所以不要传到服务器。
 SKIP_DIRS = {"tab"}
 
+# 刻意让「服务器版本优先」的文件。
+# 仓库里放的是设计原图，服务器上放的是量化压缩后的版本（体积小、真机加载快），
+# 两边会一直有差异——同步时绝不能用仓库的原图把它们覆盖回去。
+KEEP_REMOTE = {
+    "home/home-camera.png",
+    "home/home-science.png",
+}
+
 DEFAULTS = {
     "SYNC_SSH_HOST": "Administrator@42.193.99.114",
     "SYNC_STATIC_LOCAL": "../前端/assets",
@@ -165,14 +173,25 @@ def main() -> int:
         return 2
 
     missing = [r for r in local if r not in remote]
-    changed = [r for r in local if r in remote and local[r] != remote[r]]
+    differ = [r for r in local if r in remote and local[r] != remote[r]]
+    # 刻意保留服务器版的挑出来，不参与上传
+    kept = [r for r in differ if r in KEEP_REMOTE]
+    changed = [r for r in differ if r not in KEEP_REMOTE]
     same = [r for r in local if r in remote and local[r] == remote[r]]
     orphans = sorted(set(remote) - set(local))
 
     print(f"本地 {len(local)} 个 | 服务器 {len(remote)} 个")
     print(f"  一致 {len(same)}   待传 {len(missing) + len(changed)}（新增 {len(missing)}、有改动 {len(changed)}）")
     print(f"  服务器多出 {len(orphans)} 个（不会自动删）")
+    if kept:
+        print(f"  刻意保留服务器版 {len(kept)} 个（不参与同步）")
     print()
+
+    if kept:
+        print("以下文件仓库里是原图、服务器上是压缩版，按约定保留服务器版、不上传：")
+        for r in kept:
+            print(f"    = {r}  仓库 {local[r][0]} 字节 / 服务器 {remote[r][0]} 字节")
+        print()
 
     if missing:
         print("需要新增：")
@@ -189,7 +208,10 @@ def main() -> int:
             print(f"    ? {r}  ({remote[r][0] / 1024:.1f} KB)")
 
     if not missing and not changed:
-        print("✓ 两边一致，无需同步")
+        if kept:
+            print(f"✓ 除上面 {len(kept)} 个刻意保留的之外，两边一致，无需同步")
+        else:
+            print("✓ 两边一致，无需同步")
         return 0
 
     if args.check:
