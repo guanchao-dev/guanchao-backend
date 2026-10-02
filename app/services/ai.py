@@ -380,6 +380,7 @@ def _normalize_guess(data: dict, name_index: dict, coastal: bool = True) -> list
     if not isinstance(raw_cands, list):
         raw_cands = []
     out = []
+    geo_blocked: list[dict] = []  # 被地理过滤掉的候选，全被滤光时兜底用
     for c in raw_cands[:5]:
         if not isinstance(c, dict):
             continue
@@ -396,28 +397,23 @@ def _normalize_guess(data: dict, name_index: dict, coastal: bool = True) -> list
         if sid not in valid_ids:
             sid = name_index.get(name)
         reason = str(c.get("reason") or "")[:40] or "依据外观特征判断。"
-        # 地理过滤：图鉴里的都是潮间带海洋生物，只在「海边」时保留
+        # 地理过滤：图鉴里的都是潮间带海洋生物，只在「海边」时保留。
+        # 注意这里是「先标记、后决定去留」而不是直接 continue —— 见下面 geo_blocked 的兜底。
         habitat = str(c.get("habitat") or "")
-        if sid and not coastal:
-            continue
-        if not _habitat_ok(habitat, coastal):
-            continue
+        geo_mismatch = bool(sid and not coastal) or not _habitat_ok(habitat, coastal)
         # 兜底：AI 万一还是给了泛称（如「潮池小鱼」），替换成「认不出具体种类」
         if not sid and _is_generic_name(name):
-            out.append(
-                {
-                    "name": "认不出具体种类",
-                    "latinName": "",
-                    "probability": 0.0,
-                    "reason": reason,
-                    "speciesId": None,
-                    "inEncyclopedia": False,
-                    "habitat": habitat,
-                }
-            )
-            continue
-        out.append(
-            {
+            cand = {
+                "name": "认不出具体种类",
+                "latinName": "",
+                "probability": 0.0,
+                "reason": reason,
+                "speciesId": None,
+                "inEncyclopedia": False,
+                "habitat": habitat,
+            }
+        else:
+            cand = {
                 "name": name,
                 "latinName": str(c.get("latinName") or "").strip()[:60],
                 "probability": round(prob, 2),
@@ -426,12 +422,21 @@ def _normalize_guess(data: dict, name_index: dict, coastal: bool = True) -> list
                 "inEncyclopedia": bool(sid),
                 "habitat": habitat,
             }
-        )
+        (geo_blocked if geo_mismatch else out).append(cand)
 
     out.sort(key=lambda x: x["probability"], reverse=True)
     # 特征明显不符的候选不摆给用户看。至少保留最可能的那个，避免整项变空。
     strong = [c for c in out if c["probability"] >= _KEEP_MIN_PROB]
     out = strong or out[:1]
+
+    # 地理过滤同样不能把结果清空。
+    # 定位不可靠是常态：未授权、室内测试、粗定位、用户只是提前查资料。这些情况下
+    # 硬过滤会让整张照片的候选归零，最后对着一张明确的螃蟹照片回「这不是常见的赶海
+    # 生物」—— 等于当面否认用户看到的东西，比多给一个候选糟糕得多。
+    # 所以：地理过滤只在「还有别的可选」时生效；全被滤掉时兜底保留概率最高的那个。
+    if not out and geo_blocked:
+        geo_blocked.sort(key=lambda x: x["probability"], reverse=True)
+        out = geo_blocked[:1]
 
     ranked = []
     for i, c in enumerate(out):
