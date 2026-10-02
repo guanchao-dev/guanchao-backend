@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_identity
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.response import ok
-from app.core.utils import new_id
+from app.core.utils import SHANGHAI_TZ, new_id
 from app.db.base import get_db
 from app.db.models import Spot, WatchRecord
 from app.schemas import WatchEndRequest, WatchSpeciesRequest, WatchStartRequest
@@ -17,6 +17,30 @@ from app.services.species_unlock import unlock_species
 router = APIRouter(tags=["watch"])
 
 MASCOT_KEYS = ["crab-star", "crab-heart", "crab-cloud", "crab-map", "crab-helmet"]
+
+
+def _has_trash(items: list | None) -> bool:
+    """这批条目里有没有垃圾。老数据没有 kind 字段，一律按生物处理。"""
+    return any(str((s or {}).get("kind") or "").lower() == "trash" for s in (items or []))
+
+
+async def _trash_recorded_today(db: AsyncSession, owner_id: str) -> bool:
+    """今天是否已经往观潮记录里记过一次垃圾。
+
+    垃圾识别每天只允许进观潮记录一次 —— 同类条目天天重复会把这本记录淹掉。
+    「今天」按观潮会话的 started_at 日期算（客户端上报的是北京时间）；这个字段
+    为空的会话（老数据）不参与判断，免得把它误当成「今天已经记过」。
+    """
+    today = datetime.now(SHANGHAI_TZ).strftime("%Y-%m-%d")
+    rows = (
+        await db.execute(
+            select(WatchRecord.species).where(
+                WatchRecord.owner_id == owner_id,
+                WatchRecord.started_at.like(f"{today}%"),
+            )
+        )
+    ).scalars().all()
+    return any(_has_trash(_clean_items(row)) for row in rows)
 
 
 def _parse_dt(s: str) -> datetime | None:
@@ -205,6 +229,12 @@ async def add_watch_species(
         raise ConflictError("未在观潮中")
     species = _clean_items(rec.species)
     item = _normalize_watch_item(body.model_dump())
+
+    # 垃圾识别每天只允许进观潮记录一次（拍照识别的生物不受此限制）。
+    # 卡在 append 之前 —— 服务端不留这条记录，前端据 trashDailyLimit 提示用户。
+    if item["kind"] == "trash" and await _trash_recorded_today(db, owner_id):
+        return ok({"id": rec.id, "species": species, "trashDailyLimit": True})
+
     if item["name"] and not any(_item_key(s) == _item_key(item) for s in species):
         species.append(item)
     rec.species = species
@@ -237,12 +267,19 @@ async def end_watch(
     if body.species:
         merged = _clean_items(rec.species)
         seen = {_item_key(s) for s in merged}
+        # 「垃圾每天只记一次」在这里也要守：离线记的条目是在结束观潮时才合并进来的，
+        # 不在这道口子上拦的话，单条写入那边的限制就白设了。
+        trash_taken = _has_trash(merged) or await _trash_recorded_today(db, owner_id)
         for raw in body.species:
             if not isinstance(raw, dict):
                 continue
             item = _normalize_watch_item(raw)
             if not item["name"] or _item_key(item) in seen:
                 continue
+            if item["kind"] == "trash":
+                if trash_taken:
+                    continue
+                trash_taken = True
             merged.append(item)
             seen.add(_item_key(item))
         rec.species = merged

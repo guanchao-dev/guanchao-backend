@@ -1049,6 +1049,15 @@ TRASH_CATEGORIES = {
     "other": "其他垃圾",
 }
 
+# 画面里垃圾的总量档位。按「件数 + 体积/占地」综合判断，不只看件数
+# （一整张渔网是一件，但量很大）。
+TRASH_AMOUNT_LABEL = {
+    "none": "无",
+    "little": "少",
+    "some": "中等",
+    "much": "多",
+}
+
 # 各类垃圾常见的处理提示（AI 没给 tip 时兜底）
 _TRASH_TIPS = {
     "recyclable": "清空倒净、压扁后投「可回收物」桶。",
@@ -1123,6 +1132,26 @@ def _normalize_trash_items(data: dict) -> list[dict]:
     return [{"index": i + 1, **c} for i, c in enumerate(out)]
 
 
+def _trash_amount(data: dict, items: list[dict]) -> str:
+    """画面里垃圾的总量档位：little / some / much。
+
+    优先信 AI 的综合判断（它看得到体积和占地）；它没给或给了非法值，
+    再按各件 count 之和兜底。注意兜底只看件数，是次优的。
+    """
+    amount = str(data.get("amount") or "").strip().lower()
+    if amount in TRASH_AMOUNT_LABEL and amount != "none":
+        return amount
+    total = 0
+    for it in items:
+        try:
+            total += int(it.get("count") or 1)
+        except (TypeError, ValueError):
+            total += 1
+    if total <= 2:
+        return "little"
+    return "some" if total <= 5 else "much"
+
+
 async def trash_guess(
     image_bytes: bytes,
     content_type: str,
@@ -1165,8 +1194,14 @@ async def trash_guess(
         f"8. hazardNote：**这一件**对海洋生物或环境有什么危害，一句话"
         f"（没有明显危害就填空字符串）。\n"
         f"**每件只给一个结论，不要给备选答案。**\n\n"
+        f"第三步：判断画面里垃圾的**总量**。**要综合件数和体积/占地，不能只看件数**"
+        f"——一件很大的东西（整张渔网、大块泡沫）也算「多」。"
+        f"amount 只能填下面的英文值：\n"
+        f"- little（少）：只有零星一两小件，不显眼；\n"
+        f"- some（中等）：零散分布的若干件，或者虽然只有一件但体积不小；\n"
+        f"- much（多）：成片分布、大面积堆积，或者单件很大。\n\n"
         f"只输出 JSON："
-        f'{{"isTrash":true,'
+        f'{{"isTrash":true,"amount":"some",'
         f'"items":[{{"label":"画面中央沙滩上的塑料瓶","count":1,'
         f'"name":"塑料矿泉水瓶","category":"recyclable","probability":0.9,'
         f'"reason":"透明塑料瓶带蓝色标签","tip":"清空压扁后投可回收物桶",'
@@ -1205,6 +1240,8 @@ async def trash_guess(
         return {
             "isTrash": False,
             "message": "照片里没看到垃圾，干净的海边真好。",
+            "amount": "none",
+            "amountText": TRASH_AMOUNT_LABEL["none"],
             "items": [],
             "disclaimer": disclaimer,
         }
@@ -1213,9 +1250,12 @@ async def trash_guess(
     if not items:
         raise AiUnavailableError("小螃蟹没看清，请靠近一点再拍一张试试")
 
+    amount = _trash_amount(data, items)
     return {
         "isTrash": True,
         "message": "",
+        "amount": amount,
+        "amountText": TRASH_AMOUNT_LABEL[amount],
         "items": items,
         "disclaimer": disclaimer,
     }
