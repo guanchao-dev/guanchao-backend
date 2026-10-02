@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     database_url: str = "mysql+asyncmy://root:root@127.0.0.1:3306/guanchao"
     redis_url: str = "redis://127.0.0.1:6379/0"
 
+    # 连接池。服务器只有 2G 内存，别调太大：每条 MySQL 连接约占 1~2MB。
+    # 原来的默认值是 pool_size=5 / max_overflow=10（上限 15 条），并发一高就排队。
+    db_pool_size: int = 10
+    db_max_overflow: int = 10
+    db_pool_recycle: int = 3600  # 秒；MySQL wait_timeout 是 28800，取 1 小时回收一次
+
     # JWT
     jwt_secret: str = "dev-secret-change-me"
     access_token_expire_seconds: int = 7200

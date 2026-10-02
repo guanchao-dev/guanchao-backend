@@ -4,12 +4,32 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
+from app.core.deps import get_identity
+from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.response import ok, paginated
+from app.core.utils import new_id, to_shanghai_iso
 from app.db.base import get_db
-from app.db.models import Spot
+from app.db.models import Spot, UserSpot
+from app.schemas import UserSpotCreateRequest
+from app.services.content_safety import assert_text_safe
 
 router = APIRouter(tags=["spots"])
+
+# 单个身份最多能上传多少个宝藏点位（防刷）
+_MAX_USER_SPOTS = 100
+
+
+def _user_spot_item(s: UserSpot) -> dict:
+    return {
+        "id": s.id,
+        "name": s.name,
+        "address": s.address,
+        "lat": s.lat,
+        "lng": s.lng,
+        "note": s.note,
+        "photoUrl": s.photo_url,
+        "createdAt": to_shanghai_iso(s.created_at),
+    }
 
 
 def _haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> int:
@@ -70,6 +90,86 @@ async def list_spots(
     ).scalars().all()
     items = [_spot_list_item(s, lat, lng) for s in rows]
     return ok(paginated(items, page, pageSize, total))
+
+
+@router.post("/spots")
+async def create_user_spot(
+    body: UserSpotCreateRequest,
+    identity: tuple = Depends(get_identity),
+    db: AsyncSession = Depends(get_db),
+):
+    """上传一个「宝藏点位」。游客可调，身份同签到（user:{id} 或 client:{id}）。
+
+    注意：这里写的是 user_spots 表，与官方策展的 spots 完全分开，不会出现在 GET /spots 里。
+    """
+    name = (body.name or "").strip()
+    address = (body.address or "").strip()
+    note = (body.note or "").strip()
+    if not name:
+        raise BadRequestError("请填写点位名称")
+    if body.lat is None or body.lng is None:
+        raise BadRequestError("请在地图上选择点位")
+    assert_text_safe(name, address, note)
+
+    _, owner_id = identity
+    count = (
+        await db.execute(
+            select(func.count()).select_from(UserSpot).where(UserSpot.owner_id == owner_id)
+        )
+    ).scalar() or 0
+    if count >= _MAX_USER_SPOTS:
+        raise BadRequestError(f"上传的点位已达上限（{_MAX_USER_SPOTS} 个）")
+
+    s = UserSpot(
+        id=new_id("usp"),
+        owner_id=owner_id,
+        name=name[:64],
+        address=address[:255],
+        note=note[:1000],
+        photo_url=(body.photoUrl or "").strip()[:255],
+        lat=float(body.lat),
+        lng=float(body.lng),
+    )
+    db.add(s)
+    await db.commit()
+    return ok(_user_spot_item(s))
+
+
+@router.get("/spots/mine")
+async def my_user_spots(
+    identity: tuple = Depends(get_identity),
+    db: AsyncSession = Depends(get_db),
+):
+    """我上传过的宝藏点位（按时间倒序）。
+
+    ⚠️ 这个路由必须声明在 /spots/{spot_id} 之前。否则 FastAPI 会让 {spot_id} 先匹配，
+    把 "mine" 当成点位 ID 去查库，结果恒为 404。
+    """
+    _, owner_id = identity
+    rows = (
+        await db.execute(
+            select(UserSpot)
+            .where(UserSpot.owner_id == owner_id)
+            .order_by(UserSpot.created_at.desc())
+        )
+    ).scalars().all()
+    return ok({"list": [_user_spot_item(s) for s in rows]})
+
+
+@router.delete("/spots/{spot_id}")
+async def delete_user_spot(
+    spot_id: str,
+    identity: tuple = Depends(get_identity),
+    db: AsyncSession = Depends(get_db),
+):
+    """删除自己的宝藏点位。别人的点位一律当作不存在（不泄露是否真实存在）。"""
+    _, owner_id = identity
+    s = await db.get(UserSpot, spot_id)
+    if s is None or s.owner_id != owner_id:
+        raise NotFoundError("点位不存在")
+    await db.delete(s)
+    await db.commit()
+    return ok({"id": spot_id})
 
 
 @router.get("/spots/{spot_id}")

@@ -47,6 +47,15 @@ _MODIFY_COLUMNS: dict[str, list[tuple[str, str]]] = {
     ],
 }
 
+# 表名 -> (唯一键名, [列名])  —— 唯一约束
+# 加之前会先清理历史重复行（保留每组最早的一条），否则 ADD UNIQUE KEY 会直接失败。
+_UNIQUE_KEYS: dict[str, tuple[str, list[str]]] = {
+    "report_checkins": (
+        "uk_report_checkins_owner_day_session",
+        ["owner_id", "checkin_date", "session_id"],
+    ),
+}
+
 
 async def run_migrations() -> None:
     async with engine.connect() as conn:
@@ -70,7 +79,38 @@ async def run_migrations() -> None:
                 if name in existing:
                     await conn.execute(text(f"ALTER TABLE `{table}` MODIFY COLUMN `{name}` {ddl}"))
 
-        # 3. 回填 owner_id（历史数据按用户归属）
+        # 3. 唯一约束
+        for table, (key_name, columns) in _UNIQUE_KEYS.items():
+            def _has_key(sync_conn, _t=table, _n=key_name) -> bool:
+                insp = inspect(sync_conn)
+                names = {uc["name"] for uc in insp.get_unique_constraints(_t)}
+                names |= {ix["name"] for ix in insp.get_indexes(_t)}
+                return _n in names
+
+            if await conn.run_sync(_has_key):
+                continue
+
+            cols = ", ".join(f"`{c}`" for c in columns)
+            # 先清理历史重复行：每组按 created_at 升序编号，只留 rn=1 的一条。
+            # created_at 是秒级精度、并发写入可能撞在同一秒，所以用 id 兜底保证
+            # 每组恰好剩一条，否则 ALTER 会因残留重复而失败。
+            # 包一层派生表是 MySQL「不能在 DELETE 中直接子查询同表」的绕法。
+            await conn.execute(
+                text(
+                    f"DELETE FROM `{table}` WHERE `id` IN ("
+                    f"  SELECT `id` FROM ("
+                    f"    SELECT `id`, ROW_NUMBER() OVER ("
+                    f"      PARTITION BY {cols} ORDER BY `created_at` ASC, `id` ASC"
+                    f"    ) AS rn FROM `{table}`"
+                    f"  ) AS _dup WHERE _dup.rn > 1"
+                    f")"
+                )
+            )
+            await conn.execute(
+                text(f"ALTER TABLE `{table}` ADD UNIQUE KEY `{key_name}` ({cols})")
+            )
+
+        # 4. 回填 owner_id（历史数据按用户归属）
         await conn.execute(
             text(
                 "UPDATE `uploads` SET owner_id = CONCAT('user:', user_id) "

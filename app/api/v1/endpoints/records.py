@@ -9,6 +9,7 @@ from math import asin, cos, radians, sin, sqrt
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_identity
@@ -177,7 +178,19 @@ async def create_checkin(
         checkin_date=today,
     )
     db.add(rec)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # 并发下多个请求可能同时通过了上面的查重（SELECT 与 INSERT 之间没有锁），
+        # 这时唯一键 uk_report_checkins_owner_day_session 会只放行一条，其余在这里
+        # 被拦下。回滚后按幂等语义把已存在的那条返回去，对调用方仍是「已签到」。
+        await db.rollback()
+        existing = (await db.execute(dup_q)).scalar_one_or_none()
+        if existing is None:
+            raise
+        result = await _checkin_item(db, existing)
+        result["alreadyChecked"] = True
+        return ok(result)
     result = await _checkin_item(db, rec)
     result["alreadyChecked"] = False
     return ok(result)

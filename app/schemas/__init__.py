@@ -180,3 +180,14 @@ class ExploreSessionCreateRequest(BaseModel):
 
 class ExploreQrUnlockRequest(BaseModel):
     code: str
+
+
+class UserSpotCreateRequest(BaseModel):
+    """上传一个「宝藏点位」。字段与前端 spot-share 页面一致。"""
+
+    name: str
+    address: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+    note: str | None = None
+    photoUrl: str | None = None

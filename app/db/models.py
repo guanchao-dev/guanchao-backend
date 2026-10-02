@@ -1,6 +1,16 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -51,6 +61,27 @@ class Spot(Base):
     lat: Mapped[float] = mapped_column(Float, nullable=True)
     lng: Mapped[float] = mapped_column(Float, nullable=True)
     heat: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class UserSpot(Base):
+    """用户上传的「宝藏点位」。
+
+    刻意与官方策展的 spots 表分开：spots 里的内容是审核过的（有 source / reviewed_at），
+    用户上传的未审核内容混进去会污染公开的 GET /spots 列表。
+    归属用 owner_id（user:{id} 或 client:{id}），与 WatchRecord / ReportCheckin 一致。
+    """
+
+    __tablename__ = "user_spots"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(64), index=True)
+    name: Mapped[str] = mapped_column(String(64))
+    address: Mapped[str] = mapped_column(String(255), default="")
+    note: Mapped[str] = mapped_column(Text, default="")
+    photo_url: Mapped[str] = mapped_column(String(255), default="")
+    lat: Mapped[float] = mapped_column(Float, nullable=True)
+    lng: Mapped[float] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class Species(Base):
@@ -455,6 +486,14 @@ class ReportCheckin(Base):
     """
 
     __tablename__ = "report_checkins"
+    # 幂等兜底：同一身份 + 同一天 + 同一活动只能有一条。
+    # 接口层的「先查后插」是非原子的，并发下会漏，靠这个唯一键在数据库层拦住。
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_id", "checkin_date", "session_id",
+            name="uk_report_checkins_owner_day_session",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     owner_id: Mapped[str] = mapped_column(String(64), index=True)  # user:{id} 或 client:{id}
