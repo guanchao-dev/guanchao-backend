@@ -102,6 +102,27 @@ class Species(Base):
     protected: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class SpeciesUnlock(Base):
+    """用户点亮的图鉴物种（收集玩法）。
+
+    触发点：AI 识别后用户点「就是这个物种」确认时（见 watch.py 的 add_watch_species）。
+    刻意不在 AI 一返回候选时就点亮 —— 候选是「猜测」，误识别会稀释收集感。
+
+    归属用 owner_id（user:{id} 或 client:{id}），与 LightMapLit / ReportCheckin 一致。
+    唯一键不能省：查重与写入之间没有锁，并发下会写重复（签到那边踩过这个坑）。
+    """
+
+    __tablename__ = "species_unlocks"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "species_id", name="uk_species_unlocks_owner_species"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(64), index=True)
+    species_id: Mapped[str] = mapped_column(String(64), index=True)
+    unlocked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Quiz(Base):
     __tablename__ = "quizzes"
 

@@ -123,4 +123,48 @@ async def run_migrations() -> None:
                 "WHERE owner_id = '' AND user_id IS NOT NULL AND user_id != ''"
             )
         )
+
+        # 5. 图鉴点亮回填见下方 _backfill_species_unlocks —— 单独开连接、单独兜异常，
+        #    绝不能因为回填失败而拖垮整个服务启动。
+
         await conn.commit()
+
+    await _backfill_species_unlocks()
+
+
+async def _backfill_species_unlocks() -> None:
+    """图鉴点亮：从历史观潮记录回填「已确认过的物种」。
+
+    老用户确认过物种，理应一进图鉴就是亮的。只在 species_unlocks 为空时跑一次，
+    否则每次启动都要全表扫 watch_records 的 JSON。
+
+    单独开连接 + 整体兜异常：这是锦上添花的数据补齐，绝不能因为它失败而让
+    run_migrations 抛出去 —— 那会导致 uvicorn 启动失败、整站不可用。
+    背景：第一版写成 `s.id = jt.sid` 直接比较，MySQL 报 1267 Illegal mix of
+    collations（JSON_TABLE 造出的列用连接排序规则，与 species.id 的建表排序规则不同），
+    结果把服务打挂了。COLLATE 显式指定即可。
+    """
+    try:
+        async with engine.begin() as conn:
+            unlocked = (
+                await conn.execute(text("SELECT COUNT(*) FROM `species_unlocks`"))
+            ).scalar() or 0
+            if unlocked:
+                return
+            # id 用 MD5(owner_id:species_id) 生成 —— 确定性，配合 INSERT IGNORE 保证幂等。
+            # JSON_TABLE 把 species 数组展开成行；EXISTS 过滤掉已不在图鉴名录里的旧物种。
+            result = await conn.execute(
+                text(
+                    "INSERT IGNORE INTO `species_unlocks` (`id`, `owner_id`, `species_id`, `unlocked_at`) "
+                    "SELECT CONCAT('sunlock_', SUBSTRING(MD5(CONCAT(w.`owner_id`, ':', jt.sid)), 1, 16)), "
+                    "       w.`owner_id`, jt.sid, w.`created_at` "
+                    "FROM `watch_records` w, "
+                    "JSON_TABLE(w.`species`, '$[*]' COLUMNS (sid VARCHAR(64) PATH '$.speciesId')) AS jt "
+                    "WHERE w.`species` IS NOT NULL AND jt.sid IS NOT NULL AND jt.sid != '' "
+                    "  AND EXISTS (SELECT 1 FROM `species` s "
+                    "              WHERE s.`id` = jt.sid COLLATE utf8mb4_general_ci)"
+                )
+            )
+            print(f"[migrate] 图鉴点亮回填完成，新增 {result.rowcount} 条")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[migrate] 图鉴点亮回填跳过（不影响启动）：{type(exc).__name__}: {exc}")

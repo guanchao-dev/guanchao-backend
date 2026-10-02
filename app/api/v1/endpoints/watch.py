@@ -12,6 +12,7 @@ from app.core.utils import new_id
 from app.db.base import get_db
 from app.db.models import Spot, WatchRecord
 from app.schemas import WatchEndRequest, WatchSpeciesRequest, WatchStartRequest
+from app.services.species_unlock import unlock_species
 
 router = APIRouter(tags=["watch"])
 
@@ -208,7 +209,15 @@ async def add_watch_species(
         species.append(item)
     rec.species = species
     await db.commit()
-    return ok({"id": rec.id, "species": species})
+
+    # 图鉴点亮：用户确认了一种生物 → 如果它在图鉴名录里就点亮。
+    # 放在 commit 之后 —— unlock_species 内部会自己 commit（并发冲突时还会 rollback），
+    # 先提交保证观潮记录不会被连带回滚。kind='trash' 的垃圾条目不会被误点亮。
+    newly_lit = None
+    if item["kind"] == "species" and item["speciesId"]:
+        newly_lit = await unlock_species(db, owner_id, item["speciesId"])
+
+    return ok({"id": rec.id, "species": species, "newlyLitSpecies": newly_lit})
 
 
 @router.post("/watch/sessions/{session_id}/end")

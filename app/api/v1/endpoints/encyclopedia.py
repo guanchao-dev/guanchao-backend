@@ -9,7 +9,7 @@ from app.api.v1.endpoints.uploads import (
     MAX_SIZE,
     _sniff_ext,
 )
-from app.core.deps import ensure_consent, get_current_user, get_optional_user
+from app.core.deps import ensure_consent, get_current_user, get_identity, get_optional_user
 from app.core.exceptions import InvalidFileError, NotFoundError
 from app.core.response import ok, paginated
 from app.core.utils import new_id, to_shanghai_iso
@@ -17,6 +17,7 @@ from app.db.base import get_db
 from app.db.models import Favorite, Species, SpeciesPhoto, User
 from app.services import storage
 from app.services.image import compress_image
+from app.services.species_unlock import unlocked_species_ids
 
 router = APIRouter(tags=["encyclopedia"])
 
@@ -51,8 +52,11 @@ async def list_species(
     category: str | None = Query(None),
     page: int = Query(1, ge=1),
     pageSize: int = Query(20, ge=1, le=100),
+    identity: tuple = Depends(get_identity),
     db: AsyncSession = Depends(get_db),
 ):
+    _, owner_id = identity
+    lit = await unlocked_species_ids(db, owner_id)
     q = select(Species)
     if category:
         q = q.where(Species.category == category)
@@ -75,10 +79,28 @@ async def list_species(
             "coverUrl": _cover_url(s),
             "summary": s.summary,
             "protected": s.protected,
+            # 收集玩法：调用方身份是否已点亮该物种。未登录的游客按 client:{id} 算。
+            "lit": s.id in lit,
         }
         for s in rows
     ]
     return ok(paginated(items, page, pageSize, total))
+
+
+@router.get("/encyclopedia/unlocked")
+async def list_unlocked(
+    identity: tuple = Depends(get_identity),
+    db: AsyncSession = Depends(get_db),
+):
+    """我点亮的图鉴物种 + 总数，给图鉴页做「已点亮 12 / 40」进度。
+
+    ⚠️ 必须声明在 /encyclopedia/{species_id} 之前，否则 "unlocked" 会被
+    当成 species_id 匹配走、恒 404。
+    """
+    _, owner_id = identity
+    ids = sorted(await unlocked_species_ids(db, owner_id))
+    total = (await db.execute(select(func.count()).select_from(Species))).scalar() or 0
+    return ok({"speciesIds": ids, "litCount": len(ids), "totalCount": total})
 
 
 @router.get("/encyclopedia/favorites")
