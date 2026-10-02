@@ -35,6 +35,9 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
     "activities": [
         ("layout", "VARCHAR(16) NOT NULL DEFAULT 'card'"),
     ],
+    "species_unlocks": [
+        ("seen", "BOOLEAN NOT NULL DEFAULT 0"),
+    ],
 }
 
 # 表名 -> [(列名, 新的 MySQL 列定义)]  —— 调整列（如改为可空）
@@ -60,14 +63,22 @@ _UNIQUE_KEYS: dict[str, tuple[str, list[str]]] = {
 async def run_migrations() -> None:
     async with engine.connect() as conn:
         # 1. 新增列
+        added_seen_col = False
         for table, columns in _COLUMN_MIGRATIONS.items():
-            def _existing(sync_conn) -> set[str]:
-                return {c["name"] for c in inspect(sync_conn).get_columns(table)}
+            def _existing(sync_conn, _t=table) -> set[str]:
+                return {c["name"] for c in inspect(sync_conn).get_columns(_t)}
 
             existing = await conn.run_sync(_existing)
             for name, ddl in columns:
                 if name not in existing:
                     await conn.execute(text(f"ALTER TABLE `{table}` ADD COLUMN `{name}` {ddl}"))
+                    if table == "species_unlocks" and name == "seen":
+                        added_seen_col = True
+
+        # species_unlocks.seen 是后加的列：历史记录都是「早就点亮、用户早就见过」的，
+        # 不能因为列默认值是 0 就让它们在图鉴里全部闪起来。只在「这次刚加上」时回填一次。
+        if added_seen_col:
+            await conn.execute(text("UPDATE `species_unlocks` SET `seen` = 1"))
 
         # 2. 调整列
         for table, columns in _MODIFY_COLUMNS.items():

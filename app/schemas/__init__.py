@@ -191,3 +191,9 @@ class UserSpotCreateRequest(BaseModel):
     lng: float | None = None
     note: str | None = None
     photoUrl: str | None = None
+
+
+class SpeciesSeenRequest(BaseModel):
+    """把图鉴里已经展示过的「新获得」物种标记为已看过。"""
+
+    speciesIds: list[str] | None = None

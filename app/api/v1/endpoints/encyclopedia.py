@@ -15,9 +15,10 @@ from app.core.response import ok, paginated
 from app.core.utils import new_id, to_shanghai_iso
 from app.db.base import get_db
 from app.db.models import Favorite, Species, SpeciesPhoto, User
+from app.schemas import SpeciesSeenRequest
 from app.services import storage
 from app.services.image import compress_image
-from app.services.species_unlock import unlocked_species_ids
+from app.services.species_unlock import mark_species_seen, unlocked_map, unlocked_species_ids
 
 router = APIRouter(tags=["encyclopedia"])
 
@@ -98,9 +99,32 @@ async def list_unlocked(
     当成 species_id 匹配走、恒 404。
     """
     _, owner_id = identity
-    ids = sorted(await unlocked_species_ids(db, owner_id))
+    umap = await unlocked_map(db, owner_id)
     total = (await db.execute(select(func.count()).select_from(Species))).scalar() or 0
-    return ok({"speciesIds": ids, "litCount": len(ids), "totalCount": total})
+    return ok(
+        {
+            "speciesIds": sorted(umap.keys()),
+            # 刚点亮、用户还没在图鉴里看过的 —— 前端只给这些加闪光
+            "newSpeciesIds": sorted(k for k, seen in umap.items() if not seen),
+            "litCount": len(umap),
+            "totalCount": total,
+        }
+    )
+
+
+@router.post("/encyclopedia/seen")
+async def mark_seen(
+    body: SpeciesSeenRequest,
+    identity: tuple = Depends(get_identity),
+    db: AsyncSession = Depends(get_db),
+):
+    """把图鉴里已经展示给用户看过的「新获得」物种标记为已看过。
+
+    之后它们只保留金边、不再闪光。幂等，可重复调用。
+    """
+    _, owner_id = identity
+    n = await mark_species_seen(db, owner_id, body.speciesIds or [])
+    return ok({"updated": n})
 
 
 @router.get("/encyclopedia/favorites")

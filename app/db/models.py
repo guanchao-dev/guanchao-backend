@@ -121,6 +121,9 @@ class SpeciesUnlock(Base):
     owner_id: Mapped[str] = mapped_column(String(64), index=True)
     species_id: Mapped[str] = mapped_column(String(64), index=True)
     unlocked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # 用户是否已在图鉴页看过这个物种。False = 刚点亮还没看过，前端据此只给
+    # 「新获得」的物种加闪光；看过一次之后只保留金边，闪光不再出现。
+    seen: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class Quiz(Base):

@@ -3,7 +3,7 @@
 用户在 AI 识别结果里点「就是这个物种」确认后，调用这里的 unlock_species 写入
 species_unlocks 表；图鉴页据此把已点亮的物种渲染成金色。
 """
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,14 +16,46 @@ def _cover_url(species: Species) -> str:
     return f"/encyclopedia/{species.id}/cover" if species.cover_key else ""
 
 
-async def unlocked_species_ids(db: AsyncSession, owner_id: str) -> set[str]:
-    """该身份已点亮的物种 id 集合。"""
+async def unlocked_map(db: AsyncSession, owner_id: str) -> dict[str, bool]:
+    """该身份已点亮的物种 -> 是否已看过。
+
+    seen=False 表示刚点亮、用户还没在图鉴里见过 —— 前端据此只给「新获得」的
+    物种加闪光，看过一次之后只保留金边。
+    """
     rows = (
         await db.execute(
-            select(SpeciesUnlock.species_id).where(SpeciesUnlock.owner_id == owner_id)
+            select(SpeciesUnlock.species_id, SpeciesUnlock.seen).where(
+                SpeciesUnlock.owner_id == owner_id
+            )
         )
-    ).scalars().all()
-    return set(rows)
+    ).all()
+    return {sid: bool(seen) for sid, seen in rows}
+
+
+async def unlocked_species_ids(db: AsyncSession, owner_id: str) -> set[str]:
+    """该身份已点亮的物种 id 集合。"""
+    return set((await unlocked_map(db, owner_id)).keys())
+
+
+async def mark_species_seen(db: AsyncSession, owner_id: str, species_ids: list[str]) -> int:
+    """把指定物种标记为「用户已在图鉴里看过」，之后不再闪光。
+
+    幂等：只看还没标记过的。返回本次真正更新了几行。
+    """
+    ids = [s for s in (species_ids or []) if s]
+    if not ids:
+        return 0
+    res = await db.execute(
+        update(SpeciesUnlock)
+        .where(
+            SpeciesUnlock.owner_id == owner_id,
+            SpeciesUnlock.species_id.in_(ids),
+            SpeciesUnlock.seen.is_(False),
+        )
+        .values(seen=True)
+    )
+    await db.commit()
+    return res.rowcount or 0
 
 
 async def unlock_species(db: AsyncSession, owner_id: str, species_id: str) -> dict | None:
