@@ -183,7 +183,9 @@ def _record_item(r: WatchRecord, spot_name: str = "", seq: int = 0, tide_text: s
         "endedAt": r.ended_at,
         "startTime": start_time,
         "endTime": end_time,
-        "timeText": f"{start_time} – {end_time}",
+        # 这一格在记录卡上是半栏宽（约 290rpx），带空格的破折号会撑到换行，
+        # 所以用紧凑写法
+        "timeText": f"{start_time}-{end_time}",
         "durationText": duration,
         "spotName": spot_name,
         "tempText": temp_text,
