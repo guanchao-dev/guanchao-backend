@@ -141,6 +141,8 @@ class WatchSpeciesRequest(BaseModel):
     categoryLabel: str | None = None
     label: str | None = None
     count: int | None = None  # 同一物种 / 同类垃圾在照片里的个数
+    # 仅垃圾：这张照片的垃圾总量档位 little/some/much（观潮记录卡要展示「垃圾量」）
+    amount: str | None = None
 
 
 class WatchEndRequest(BaseModel):

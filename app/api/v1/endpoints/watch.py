@@ -80,6 +80,9 @@ def _normalize_watch_item(raw: dict) -> dict:
         "guessId": str(raw.get("guessId") or "")[:64],
         "category": str(raw.get("category") or "")[:16] if is_trash else "",
         "categoryLabel": str(raw.get("categoryLabel") or "")[:16] if is_trash else "",
+        # 这张照片的垃圾总量档位（little/some/much）。观潮记录里要展示「垃圾量」，
+        # 只对垃圾有意义；记录里每天最多一条垃圾，所以挂在条目上不会冲突。
+        "amount": str(raw.get("amount") or "")[:8] if is_trash else "",
         "label": str(raw.get("label") or "")[:32],
         # 同一物种 / 同类垃圾在照片里的个数。前端本地缓存存了它，
         # 服务端漏了的话两条来源的记录形状会不一致。
