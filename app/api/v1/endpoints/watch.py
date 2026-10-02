@@ -13,6 +13,10 @@ from app.db.base import get_db
 from app.db.models import Spot, WatchRecord
 from app.schemas import WatchEndRequest, WatchSpeciesRequest, WatchStartRequest
 from app.services.species_unlock import unlock_species
+from app.services.tide import get_tide_window, get_weather
+
+# 观潮记录卡上的日期写法：周六.10.03（与前端 dateLabel 的中文习惯一致）
+_WEEKDAY_CN = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
 router = APIRouter(tags=["watch"])
 
@@ -133,19 +137,25 @@ def _mascot_key(r: WatchRecord) -> str:
     return MASCOT_KEYS[int(r.id[-2:], 16) % len(MASCOT_KEYS)] if r.id else MASCOT_KEYS[0]
 
 
-def _record_item(r: WatchRecord, spot_name: str = "") -> dict:
+def _record_item(r: WatchRecord, spot_name: str = "", seq: int = 0, tide_text: str = "") -> dict:
     start = _parse_dt(r.started_at)
     end = _parse_dt(r.ended_at) if r.ended_at else None
     if start is None:
         return {
             "id": r.id,
+            "seq": seq,
             "date": "",
+            "dateText": "",
             "startedAt": r.started_at,
             "endedAt": r.ended_at,
             "startTime": "",
             "endTime": "",
+            "timeText": "",
             "durationText": "",
             "spotName": spot_name,
+            "tempText": "",
+            "weatherText": "",
+            "tideText": tide_text,
             "species": _clean_items(r.species),
             "summary": "",
             "mascotKey": _mascot_key(r),
@@ -156,15 +166,30 @@ def _record_item(r: WatchRecord, spot_name: str = "") -> dict:
     end_time = end.strftime("%H:%M") if end else start_time
     duration = _duration_text(start, end or start)
     species = _clean_items(r.species)
+    # 天气现在是 get_weather 的占位实现（固定「多云 24℃」），接真实天气接口后这里自动变真
+    weather = get_weather(r.spot_id, date) or {}
+    try:
+        temp_text = f"{int(weather.get('tempC'))}℃"
+    except (TypeError, ValueError):
+        temp_text = ""
     return {
         "id": r.id,
+        # 观潮编号：按开始时间从早到晚排，第几次观潮
+        "seq": seq,
         "date": date,
+        # 参考图那种「周六.10.03」写法
+        "dateText": f"{_WEEKDAY_CN[start.weekday()]}.{start.strftime('%m.%d')}",
         "startedAt": r.started_at,
         "endedAt": r.ended_at,
         "startTime": start_time,
         "endTime": end_time,
+        "timeText": f"{start_time} – {end_time}",
         "durationText": duration,
         "spotName": spot_name,
+        "tempText": temp_text,
+        "weatherText": str(weather.get("text") or ""),
+        # 潮高：只有详情接口会算（要读潮汐缓存），列表里留空
+        "tideText": tide_text,
         "species": species,
         "summary": _summary(start_time, end_time, duration, species),
         "mascotKey": _mascot_key(r),
@@ -177,6 +202,36 @@ async def _spot_name(db: AsyncSession, spot_id: str) -> str:
         return ""
     spot = await db.get(Spot, spot_id)
     return spot.name if spot else ""
+
+
+async def _record_seqs(db: AsyncSession, owner_id: str) -> dict[str, int]:
+    """记录 id -> 第几次观潮（按开始时间从早到晚编号，1 起）。
+
+    观潮记录卡上要显示「观潮编号」。一次查全量再算下标，比每条记录各查一次
+    少 N 次往返。
+    """
+    rows = (
+        await db.execute(
+            select(WatchRecord.id)
+            .where(WatchRecord.owner_id == owner_id)
+            .order_by(WatchRecord.started_at.asc(), WatchRecord.id.asc())
+        )
+    ).scalars().all()
+    return {rid: i + 1 for i, rid in enumerate(rows)}
+
+
+async def _tide_text(db: AsyncSession, rec: WatchRecord) -> str:
+    """观潮开始时的潮高，形如「1.2 米」。拿不到就返回空串（那一格留白）。"""
+    start = _parse_dt(rec.started_at)
+    if start is None or not rec.spot_id:
+        return ""
+    try:
+        tide = await get_tide_window(rec.spot_id, start, db)
+        h = tide.get("currentHeightM")
+        return f"{float(h):.1f} 米" if h is not None else ""
+    except Exception:  # noqa: BLE001
+        # 潮汐取不到不该让整个详情打不开
+        return ""
 
 
 @router.post("/watch/sessions")
@@ -308,7 +363,14 @@ async def list_watch_records(
     if spot_ids:
         spots = (await db.execute(select(Spot).where(Spot.id.in_(spot_ids)))).scalars().all()
         spot_names = {s.id: s.name for s in spots}
-    return ok({"list": [_record_item(r, spot_names.get(r.spot_id, "")) for r in rows]})
+    seqs = await _record_seqs(db, owner_id)
+    return ok(
+        {
+            "list": [
+                _record_item(r, spot_names.get(r.spot_id, ""), seqs.get(r.id, 0)) for r in rows
+            ]
+        }
+    )
 
 
 @router.get("/watch/records/{record_id}")
@@ -321,4 +383,13 @@ async def watch_record_detail(
     rec = await db.get(WatchRecord, record_id)
     if rec is None or rec.owner_id != owner_id:
         raise NotFoundError("观潮记录不存在")
-    return ok(_record_item(rec, await _spot_name(db, rec.spot_id)))
+    seqs = await _record_seqs(db, owner_id)
+    return ok(
+        _record_item(
+            rec,
+            await _spot_name(db, rec.spot_id),
+            seqs.get(rec.id, 0),
+            # 潮高要读潮汐缓存，只在详情里算，列表不做这个开销
+            await _tide_text(db, rec),
+        )
+    )
