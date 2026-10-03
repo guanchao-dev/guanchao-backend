@@ -47,6 +47,8 @@ def _spot_list_item(s: Spot, lat: float | None, lng: float | None) -> dict:
         "id": s.id,
         "name": s.name,
         "city": s.city,
+        # 所属区（崂山区/黄岛区/…）。热度排名按区分组，前端也用它做二级展示
+        "district": s.district or "",
         "heat": s.heat or 0,
         "latitude": s.lat,
         "longitude": s.lng,

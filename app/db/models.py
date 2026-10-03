@@ -49,6 +49,9 @@ class Spot(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(64))
     city: Mapped[str] = mapped_column(String(32))
+    # 所属区（如「崂山区」）。city 是市级（青岛/威海），这个是区级，
+    # 热度排名是按区分组排的，前端展示也用得上。
+    district: Mapped[str] = mapped_column(String(32), default="")
     cover_key: Mapped[str] = mapped_column(String(255), default="")
     open_time: Mapped[str] = mapped_column(String(128), default="")
     age_hint: Mapped[str] = mapped_column(String(128), default="")

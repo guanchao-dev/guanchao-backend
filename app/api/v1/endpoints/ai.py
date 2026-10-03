@@ -22,7 +22,7 @@ from app.services.ai import primary_candidates, stored_items
 from app.services.ai import species_guess as ai_species_guess
 from app.services.ai import trash_guess as ai_trash_guess
 from app.services.ai import tide_advice
-from app.services.tide import get_tide, get_weather
+from app.services.tide import build_beachcombing_hint, get_tide, get_weather
 
 router = APIRouter(tags=["ai"])
 
@@ -93,11 +93,47 @@ def _guess_response(guess: Guess) -> dict:
     }
 
 
+async def _nearest_spot(db: AsyncSession, lat: float, lng: float, pool: int = 5) -> Spot | None:
+    """就近推荐：在离用户最近的 pool 个点位里，挑热度最高的那个。
+
+    只推最近的一个，经常推到一个冷门点；只推最热的，又可能离得很远。
+    取「最近的几个」再按热度选，兼顾近和值得去。
+    """
+    rows = (await db.execute(select(Spot))).scalars().all()
+    cand = []
+    for s in rows:
+        if s.lat is None or s.lng is None:
+            continue
+        cand.append((_distance_km(lat, lng, s.lat, s.lng), s))
+    if not cand:
+        return None
+    cand.sort(key=lambda x: x[0])
+    near = cand[:pool]
+    near.sort(key=lambda x: (x[1].heat or 0), reverse=True)
+    return near[0][1]
+
+
+def _distance_text(km: float | None) -> str:
+    if km is None:
+        return ""
+    return f"{km:.1f} 公里" if km >= 1 else f"{int(km * 1000)} 米"
+
+
 @router.post("/ai/tide-advice")
 async def ai_tide_advice(body: TideAdviceRequest, db: AsyncSession = Depends(get_db)):
-    spot = await db.get(Spot, body.spotId)
+    """出行建议。
+
+    前端传「坐标 + 日期」，返回三样：推荐时间、离场时间、一个推荐地点。
+    不适合赶海时 suitableNow 为 false，那三样都为 null。
+    """
+    # 定位：优先按坐标就近推荐；没给坐标就退回按点位 id（兼容老调用）
+    if body.lat is not None and body.lng is not None:
+        spot = await _nearest_spot(db, body.lat, body.lng)
+    else:
+        spot = await db.get(Spot, body.spotId) if body.spotId else None
     if spot is None:
         raise NotFoundError("点位不存在")
+
     tide = await get_tide(spot.id, body.date)
     weather = get_weather(spot.id, body.date)
     now = datetime.now(SHANGHAI_TZ)
@@ -108,6 +144,31 @@ async def ai_tide_advice(body: TideAdviceRequest, db: AsyncSession = Depends(get
         "safety_tags": spot.safety_tags,
     }
     advice = await tide_advice(tide, weather, spot_info, now)
+
+    # 补上「推荐时间 / 离场时间 / 推荐地点」这三样。
+    # bestWindow 与 leaveBefore 潮汐服务里已经算好了（低潮前后最合适），
+    # 这里只是把它们摘出来给前端，不重新计算。
+    suitable = advice.get("suitableNow") is True
+    win = (build_beachcombing_hint(tide, now).get("bestWindow") or {}) if suitable else {}
+    km = (
+        _distance_km(body.lat, body.lng, spot.lat, spot.lng)
+        if body.lat is not None and body.lng is not None and spot.lat is not None and spot.lng is not None
+        else None
+    )
+    advice["bestTimeFrom"] = win.get("start") if suitable else None
+    advice["bestTimeTo"] = win.get("end") if suitable else None
+    advice["recommendedSpot"] = (
+        {
+            "id": spot.id,
+            "name": spot.name,
+            "district": spot.district or "",
+            "heat": spot.heat or 0,
+            "distanceM": int(km * 1000) if km is not None else None,
+            "distanceText": _distance_text(km),
+        }
+        if suitable
+        else None
+    )
     return ok(advice)
 
 

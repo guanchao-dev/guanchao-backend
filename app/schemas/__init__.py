@@ -11,8 +11,17 @@ class RefreshRequest(BaseModel):
 
 
 class TideAdviceRequest(BaseModel):
-    spotId: str
+    """出行建议。
+
+    两种调用方式，二选一：
+    - 传 lat/lng：按坐标就近推荐点位（新方式，前端用这个）
+    - 传 spotId：指定点位（老方式，兼容保留）
+    """
+
+    spotId: str | None = None
     date: str | None = None
+    lat: float | None = None
+    lng: float | None = None
 
 
 class UploadCredentialRequest(BaseModel):

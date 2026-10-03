@@ -14,6 +14,8 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
     ],
     "spots": [
         ("heat", "INT NOT NULL DEFAULT 0"),
+        # 所属区（崂山区/黄岛区/…）。热度排名按区分组，前端展示也要用
+        ("district", "VARCHAR(32) NOT NULL DEFAULT ''"),
     ],
     "watch_records": [
         ("spot_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
