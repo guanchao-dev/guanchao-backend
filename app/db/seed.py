@@ -45,8 +45,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（极热门·区内第1名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.293739,
+        "lng": 120.65105,
     },
     {
         "id": "spot_qd_shilaoren",
@@ -62,8 +62,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（极热门·区内第2名）",
         "reviewed_at": "2026-10-04",
-        "lat": 36.083,
-        "lng": 120.468,
+        "lat": 36.09168,
+        "lng": 120.46801,
     },
     {
         "id": "spot_qd_03",
@@ -79,8 +79,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（热门·区内第3名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.054245,
+        "lng": 120.431045,
     },
     {
         "id": "spot_qd_04",
@@ -96,8 +96,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（热门·区内第4名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.272146,
+        "lng": 120.654842,
     },
     {
         "id": "spot_qd_05",
@@ -113,8 +113,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（较热门·区内第5名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.113192,
+        "lng": 120.543701,
     },
     {
         "id": "spot_qd_06",
@@ -130,8 +130,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（较热门·区内第6名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.069211,
+        "lng": 120.442663,
     },
     {
         "id": "spot_qd_07",
@@ -147,8 +147,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（较热门·区内第7名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.079683,
+        "lng": 120.454678,
     },
     {
         "id": "spot_qd_08",
@@ -164,8 +164,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（较热门·区内第8名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.073812,
+        "lng": 120.44834,
     },
     {
         "id": "spot_qd_09",
@@ -181,8 +181,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.27905,
+        "lng": 120.675579,
     },
     {
         "id": "spot_qd_luqinghe",
@@ -198,8 +198,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
         "reviewed_at": "2026-10-04",
-        "lat": 36.111,
-        "lng": 120.555,
+        "lat": 36.12522,
+        "lng": 120.614519,
     },
     {
         "id": "spot_qd_11",
@@ -215,8 +215,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.099527,
+        "lng": 120.536891,
     },
     {
         "id": "spot_qd_12",
@@ -232,8 +232,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.110295,
+        "lng": 120.539223,
     },
     {
         "id": "spot_qd_13",
@@ -249,8 +249,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.127041,
+        "lng": 120.621997,
     },
     {
         "id": "spot_qd_14",
@@ -266,8 +266,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（极热门·区内第1名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 35.894416,
+        "lng": 120.176716,
     },
     {
         "id": "spot_qd_15",
@@ -283,8 +283,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（热门·区内第2名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 35.893377,
+        "lng": 120.200093,
     },
     {
         "id": "spot_qd_16",
@@ -300,8 +300,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（较热门·区内第3名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 35.919307,
+        "lng": 120.203651,
     },
     {
         "id": "spot_qd_17",
@@ -317,8 +317,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（较热门·区内第4名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.095299,
+        "lng": 120.112572,
     },
     {
         "id": "spot_qd_18",
@@ -334,8 +334,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（较热门·区内第5名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 35.926987,
+        "lng": 120.199437,
     },
     {
         "id": "spot_qd_19",
@@ -351,8 +351,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（较热门·区内第6名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 35.92576,
+        "lng": 120.138472,
     },
     {
         "id": "spot_qd_20",
@@ -368,8 +368,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（较热门·区内第7名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 35.89421,
+        "lng": 120.106807,
     },
     {
         "id": "spot_qd_21",
@@ -385,8 +385,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（一般·区内第8名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 35.948217,
+        "lng": 120.244579,
     },
     {
         "id": "spot_qd_22",
@@ -402,8 +402,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 35.969802,
+        "lng": 120.269815,
     },
     {
         "id": "spot_qd_23",
@@ -419,8 +419,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 35.921758,
+        "lng": 120.138033,
     },
     {
         "id": "spot_qd_24",
@@ -453,8 +453,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.306133,
+        "lng": 120.30648,
     },
     {
         "id": "spot_qd_26",
@@ -470,8 +470,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 35.819673,
+        "lng": 120.031438,
     },
     {
         "id": "spot_qd_27",
@@ -487,8 +487,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 35.859282,
+        "lng": 120.052872,
     },
     {
         "id": "spot_qd_28",
@@ -504,8 +504,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（极热门·区内第1名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.061736,
+        "lng": 120.3193,
     },
     {
         "id": "spot_qd_29",
@@ -521,8 +521,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（极热门·区内第2名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.053038,
+        "lng": 120.360265,
     },
     {
         "id": "spot_qd_yigong",
@@ -538,8 +538,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（热门·区内第3名）",
         "reviewed_at": "2026-10-04",
-        "lat": 36.058,
-        "lng": 120.347,
+        "lat": 36.057428,
+        "lng": 120.341325,
     },
     {
         "id": "spot_qd_31",
@@ -555,8 +555,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（较热门·区内第4名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.062461,
+        "lng": 120.409946,
     },
     {
         "id": "spot_qd_32",
@@ -572,8 +572,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（较热门·区内第5名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.048855,
+        "lng": 120.344593,
     },
     {
         "id": "spot_qd_33",
@@ -589,8 +589,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.055542,
+        "lng": 120.40785,
     },
     {
         "id": "spot_qd_34",
@@ -606,8 +606,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.054643,
+        "lng": 120.395063,
     },
     {
         "id": "spot_qd_35",
@@ -623,8 +623,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.057818,
+        "lng": 120.422801,
     },
     {
         "id": "spot_qd_36",
@@ -640,8 +640,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（热门·区内第1名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.374702,
+        "lng": 120.691338,
     },
     {
         "id": "spot_qd_37",
@@ -657,8 +657,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（较热门·区内第2名）",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.337454,
+        "lng": 120.685221,
     },
     {
         "id": "spot_qd_38",
@@ -674,8 +674,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.33622,
+        "lng": 120.70048,
     },
     {
         "id": "spot_qd_39",
@@ -691,8 +691,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.508057,
+        "lng": 120.531821,
     },
     {
         "id": "spot_qd_40",
@@ -708,8 +708,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.33736,
+        "lng": 120.713661,
     },
     {
         "id": "spot_qd_41",
@@ -725,8 +725,8 @@ SPOTS = [
         "gear_list": [],
         "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
         "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
+        "lat": 36.334812,
+        "lng": 120.721537,
     },
     {
         "id": "spot_wh_chengshantou",
@@ -742,8 +742,8 @@ SPOTS = [
         "gear_list": ["防滑鞋", "防风外套"],
         "source": "追潮记团队整理",
         "reviewed_at": "2026-08-01",
-        "lat": 37.385,
-        "lng": 122.713,
+        "lat": 37.401724,
+        "lng": 122.698982,
     },
 ]
 
@@ -1847,12 +1847,12 @@ SPOT_HEAT = {
 }
 
 
-async def _sync_spot_heat(session: AsyncSession) -> None:
-    """同步已有点位的热度与所属区（幂等，覆盖旧值）。
+async def _sync_spot_fields(session: AsyncSession) -> None:
+    """同步已有点位的热度、所属区与坐标（幂等，覆盖旧值）。
 
-    这两个字段会随运营调整（热度排名更新、补充行政区划），而 _seed_missing
-    只补缺失行、不覆盖已存在的行 —— 老点位就吃不到新值。
-    所以这里单独同步一次：热度取自 SPOT_HEAT，所属区取自 SPOTS 里的 district。
+    这些字段会随运营调整（热度排名更新、行政区划与坐标补全），而
+    _seed_missing 只补缺失行、不覆盖已存在的行 —— 老点位就吃不到新值。
+    所以这里单独同步一次。
     """
     for item in SPOTS:
         spot = await session.get(Spot, item["id"])
@@ -1863,12 +1863,17 @@ async def _sync_spot_heat(session: AsyncSession) -> None:
         district = item.get("district")
         if district:
             spot.district = district
+        # 坐标只在种子里有值时才覆盖 —— 留空的点位（如顾家岛码头，
+        # 高德没搜到准确位置）不能把已有坐标抹掉
+        if item.get("lat") is not None and item.get("lng") is not None:
+            spot.lat = item["lat"]
+            spot.lng = item["lng"]
 
 
 async def seed_if_empty(session: AsyncSession) -> None:
     """按主键补齐种子数据（幂等）。表里已有的行不会被覆盖。"""
     await _seed_missing(session, Spot, SPOTS)
-    await _sync_spot_heat(session)
+    await _sync_spot_fields(session)
     await _seed_missing(session, Species, SPECIES)
     await _remove_deprecated_species(session)
     await _sync_species_covers(session)
