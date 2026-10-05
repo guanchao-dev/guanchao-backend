@@ -47,6 +47,13 @@ SKIP_DIRS = {"tab"}
 KEEP_REMOTE = {
     "home/home-camera.png",
     "home/home-science.png",
+    # to-upload 这几张同理：仓库里是设计原图，服务器上是量化压缩后的版本（约 1/5 体积）。
+    # 不列进来，跑一次同步就会把服务器上的压缩版覆盖成原图，用户端要下的图瞬间大 5 倍。
+    "to-upload/mascot-avatar.png",
+    "to-upload/mascot-boy.png",
+    "to-upload/mascot-girl.png",
+    "to-upload/paopao-q-2x.png",
+    "to-upload/我的头像吉祥物@2x.png",
 }
 
 DEFAULTS = {
