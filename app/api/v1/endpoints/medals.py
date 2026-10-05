@@ -8,9 +8,16 @@ from app.core.response import ok, paginated
 from app.core.utils import new_id, to_shanghai_iso
 from app.db.base import get_db
 from app.db.models import CommunityFollow, Medal, User, UserMedal
-from app.schemas import ShareRequest, UnlockAckRequest
+from app.schemas import ReportEventRequest, ShareRequest, UnlockAckRequest
+from app.services.achievements import grant_medal
 
 router = APIRouter(tags=["achievements"])
+
+# 可以由前端上报的动作 → 勋章 id。
+# 做成白名单而不是「前端传什么就发什么」：否则任何人都能拿这个接口把勋章刷满。
+REPORTABLE = {
+    "deepblue_mileage": "medal_7",  # 点进「深蓝百万里」链接
+}
 
 
 async def _unlocked_map(db: AsyncSession, user: User | None) -> dict[str, object]:
@@ -88,6 +95,23 @@ async def pending_unlocks(
             }
         )
     return ok({"list": items})
+
+
+@router.post("/achievements/report")
+async def report_event(
+    body: ReportEventRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """上报一个服务端看不见的用户动作（目前只有「点进深蓝百万里」）。
+
+    需要登录；`event` 不在白名单 → 400。已解锁则幂等（返回空列表）。
+    """
+    medal_id = REPORTABLE.get((body.event or "").strip())
+    if medal_id is None:
+        raise BadRequestError("不支持的事件")
+    newly = await grant_medal(db, user, medal_id)
+    return ok({"event": body.event, "unlockedMedalIds": newly})
 
 
 @router.post("/medals/{medal_id}/unlock-ack")

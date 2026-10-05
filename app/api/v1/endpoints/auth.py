@@ -13,6 +13,7 @@ from app.core.response import ok
 from app.core.security import create_access_token, create_refresh_token, hash_token
 from app.core.utils import new_id
 from app.db.base import get_db
+from app.services.achievements import evaluate_medals
 from app.db.models import (
     Card,
     Checkin,
@@ -117,6 +118,9 @@ async def wechat_login(
         await db.refresh(user)
     # 登录后合并该设备上的游客数据（只合并一次，后续游客数据仍按 client 归属）
     await _merge_guest_data(db, user.id, body.clientId or x_client_id)
+    # 登录即结算一次：有些成就是「登录」本身触发的（如活动期间登录）。
+    # 放在发 token 之前，让返回的用户数据带上新的分数。
+    await evaluate_medals(db, user)
     return ok(await _issue_tokens(db, user))
 
 

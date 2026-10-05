@@ -273,6 +273,25 @@ class Guess(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class TrashGuess(Base):
+    """垃圾识别记录 —— 只为「深蓝小卫士」成就而存。
+
+    物种识别走 Guess 表，垃圾识别原本**什么都不落库**（结果直接返回给客户端），
+    成就没法判断。只在 AI 判定「确实是垃圾」时写一行：对着鼠标拍照那种不算。
+    """
+
+    __tablename__ = "trash_guesses"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(64), index=True)  # user:{id} 或 client:{id}
+    user_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("users.id"), index=True, nullable=True
+    )
+    amount: Mapped[str] = mapped_column(String(16), default="")  # none/few/some/many
+    categories: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Checkin(Base):
     __tablename__ = "checkins"
 

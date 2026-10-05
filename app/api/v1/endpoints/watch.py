@@ -13,6 +13,7 @@ from app.db.base import get_db
 from app.db.models import Spot, WatchRecord
 from app.schemas import WatchEndRequest, WatchSpeciesRequest, WatchStartRequest
 from app.services import weather as weather_svc
+from app.services.achievements import evaluate_medals
 from app.services.species_unlock import unlock_species
 from app.services.tide import get_tide_window
 
@@ -285,7 +286,7 @@ async def add_watch_species(
     identity: tuple = Depends(get_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    _, owner_id = identity
+    user, owner_id = identity
     rec = await db.get(WatchRecord, session_id)
     if rec is None or rec.owner_id != owner_id:
         raise NotFoundError("观潮会话不存在")
@@ -311,7 +312,18 @@ async def add_watch_species(
     if item["kind"] == "species" and item["speciesId"]:
         newly_lit = await unlock_species(db, owner_id, item["speciesId"])
 
-    return ok({"id": rec.id, "species": species, "newlyLitSpecies": newly_lit})
+    # 点亮后结算一次成就：集齐「螺」这类靠图鉴收集的成就只有这里能触发。
+    # 游客做不了成就（UserMedal 挂在 user 上），守卫同物种识别那边。
+    newly_medals = await evaluate_medals(db, user) if user is not None else []
+
+    return ok(
+        {
+            "id": rec.id,
+            "species": species,
+            "newlyLitSpecies": newly_lit,
+            "unlockedMedalIds": newly_medals,
+        }
+    )
 
 
 @router.post("/watch/sessions/{session_id}/end")

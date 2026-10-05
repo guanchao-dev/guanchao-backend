@@ -9,7 +9,7 @@ from app.core.exceptions import NotFoundError
 from app.core.response import ok
 from app.core.utils import SHANGHAI_TZ, new_id
 from app.db.base import get_db
-from app.db.models import Guess, Species, Spot, Upload
+from app.db.models import Guess, Species, Spot, TrashGuess, Upload
 from app.schemas import (
     GuessFeedbackRequest,
     SpeciesGuessRequest,
@@ -270,8 +270,30 @@ async def create_trash_guess(
         upload.content_type,
         spot.name if spot else "海边",
     )
+
+    # 只记「确实识别出垃圾」的 —— 给「深蓝小卫士」成就判断用。
+    # 对着鼠标拍照会返回 isTrash=False，那种不算。垃圾识别原来什么都不落库。
+    if result.get("isTrash"):
+        db.add(
+            TrashGuess(
+                id=new_id("tg"),
+                owner_id=owner_id,
+                user_id=user.id if user is not None else None,
+                amount=str(result.get("amount") or "")[:16],
+                categories=[
+                    i.get("category")
+                    for i in (result.get("items") or [])
+                    if isinstance(i, dict) and i.get("category")
+                ],
+            )
+        )
+        await db.commit()
+
     # 识别完了，把用户拍的那张删掉（见 _discard_upload）
     await _discard_upload(db, upload)
+
+    newly = await evaluate_medals(db, user) if user is not None else []
+    result["unlockedMedalIds"] = newly
     return ok(result)
 
 

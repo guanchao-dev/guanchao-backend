@@ -1749,6 +1749,88 @@ MEDALS = [
         "icon_key": "", "description": "对照图鉴完成 3 次正确猜测。",
         "requirements": [{"text": "完成 3 次正确猜测"}], "rewards": {"score": 120}, "sort": 5,
     },
+    # ===== 众筹成就（设计同学交来的 13 个）=====
+    # icon_key = 完整 URL（客户端把它当完整地址用）。这里先用现成的 badge 图占位，
+    # 后续换成正式图案时只改这一行即可；_seed_missing 只插不改，所以要改已入库的
+    # 成就得另外写一次同步（或手工改库）。
+    {
+        "id": "medal_6", "title": "蓝色青年行动", "display_title": "蓝色青年行动", "rarity": "common",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-heart.png",
+        "description": "活动期间登录追潮记即可获得。",
+        "requirements": [{"text": "10.7-10.17 期间登录"}], "rewards": {"score": 40}, "sort": 6,
+    },
+    {
+        "id": "medal_7", "title": "深蓝百万里", "display_title": "深蓝百万里", "rarity": "common",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-map.png",
+        "description": "点进「深蓝百万里」看一看。",
+        "requirements": [{"text": "进入「深蓝百万里」"}], "rewards": {"score": 40}, "sort": 7,
+    },
+    {
+        "id": "medal_8", "title": "……好吧也比没有强", "display_title": "……好吧也比没有强", "rarity": "common",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-dig.png",
+        "description": "捡到一块石头也算收获。",
+        "requirements": [{"text": "识别到一块石头"}], "rewards": {"score": 40}, "sort": 8,
+    },
+    {
+        "id": "medal_9", "title": "蟹蟹！", "display_title": "蟹蟹！", "rarity": "common",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-cloud.png",
+        "description": "第一次识别到螃蟹。",
+        "requirements": [{"text": "识别到螃蟹"}], "rewards": {"score": 40}, "sort": 9,
+    },
+    {
+        "id": "medal_10", "title": "蟹老板", "display_title": "蟹老板", "rarity": "rare",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-crown.png",
+        "description": "识别到很多只螃蟹，蟹老板本蟹。",
+        "requirements": [{"text": "累计识别 10 次螃蟹"}], "rewards": {"score": 70}, "sort": 10,
+    },
+    {
+        "id": "medal_11", "title": "海景房", "display_title": "“海景房”", "rarity": "epic",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-star.png",
+        "description": "一次拍照就认出三种及以上潮间带生物。",
+        "requirements": [{"text": "单次识别出 3 种以上生物"}], "rewards": {"score": 120}, "sort": 11,
+    },
+    {
+        "id": "medal_12", "title": "海星拾趣", "display_title": "海星拾趣", "rarity": "rare",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-heart.png",
+        "description": "拍照识别到海星。",
+        "requirements": [{"text": "识别到海星"}], "rewards": {"score": 70}, "sort": 12,
+    },
+    {
+        "id": "medal_13", "title": "海洋记录员", "display_title": "这就是…海洋记录员？", "rarity": "epic",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-book.png",
+        "description": "累计识别出足够多种不同的生物。",
+        "requirements": [{"text": "累计识别 10 种不同生物"}], "rewards": {"score": 120}, "sort": 13,
+    },
+    {
+        "id": "medal_14", "title": "深蓝小卫士", "display_title": "深蓝小卫士", "rarity": "rare",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-helmet.png",
+        "description": "用垃圾识别认出海边的垃圾。",
+        "requirements": [{"text": "拍照识别出海洋垃圾"}], "rewards": {"score": 70}, "sort": 14,
+    },
+    {
+        "id": "medal_15", "title": "海的味道我知道", "display_title": "海的味道我知道！", "rarity": "rare",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-checklist.png",
+        "description": "拍照识别到紫菜。",
+        "requirements": [{"text": "识别到紫菜"}], "rewards": {"score": 70}, "sort": 15,
+    },
+    {
+        "id": "medal_16", "title": "siuuuuuu", "display_title": "siuuuuuu～～～", "rarity": "epic",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-astronaut.png",
+        "description": "把图鉴里所有以「螺」结尾的生物都集齐。",
+        "requirements": [{"text": "集齐图鉴中所有「螺」类生物"}], "rewards": {"score": 120}, "sort": 16,
+    },
+    {
+        "id": "medal_17", "title": "洞口常含盐巴", "display_title": "为什么我的洞口常含盐巴", "rarity": "rare",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-dig.png",
+        "description": "抓到蛏子并拍照识别。",
+        "requirements": [{"text": "识别到蛏子"}], "rewards": {"score": 70}, "sort": 17,
+    },
+    {
+        "id": "medal_18", "title": "拍我干什么", "display_title": "拍我干什么？", "rarity": "rare",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-search.png",
+        "description": "拍照识别到藤壶。",
+        "requirements": [{"text": "识别到藤壶"}], "rewards": {"score": 70}, "sort": 18,
+    },
 ]
 
 

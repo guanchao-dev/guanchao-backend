@@ -111,6 +111,15 @@ class ReadNotificationsRequest(BaseModel):
     ids: list[str] | None = None
 
 
+class ReportEventRequest(BaseModel):
+    """前端上报一个「服务端看不见」的用户动作（成就用）。
+
+    目前只支持 `deepblue_mileage`（点进「深蓝百万里」）。
+    """
+
+    event: str
+
+
 class ReportCheckinRequest(BaseModel):
     """研学报到签到。lat/lng 前端已按约 300 米网格取整。
 
