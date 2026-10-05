@@ -382,8 +382,8 @@
     { key: 'pending', label: '待审核', src: 'sub' },
     { key: 'approved', label: '已通过', src: 'sub' },
     { key: 'rejected', label: '已驳回', src: 'sub' },
-    { key: 'fb_general', label: '通用反馈', src: 'fb', kind: 'general' },
-    { key: 'fb_review', label: '审核反馈', src: 'fb', kind: 'review' }
+    { key: 'fb_review', label: '审核反馈', src: 'fb', kind: 'review' },
+    { key: 'fb_general', label: '通用反馈', src: 'fb', kind: 'general' }
   ];
   var PAGE_SIZE = 50;
 
@@ -1011,6 +1011,11 @@
     var b = e.target.closest('button[data-tab]');
     if (!b) return;
     state.tab = b.dataset.tab;
+    // 切到反馈栏时总是从「未处理」开始 —— 两个反馈栏之间来回切也一样，
+    // 默认落在待看的上面，免得停在「已处理」以为没新反馈。
+    if (tabOf(state.tab).src === 'fb') {
+      state.fbStatus = 'pending';
+    }
     state.selectedId = null;
     renderTabs();
     loadList(1);
