@@ -65,6 +65,22 @@ async def _is_coastal(
     return False
 
 
+async def _discard_upload(db: AsyncSession, upload: Upload) -> None:
+    """识别完就把用户拍的照片删掉 —— 这类图不该存。
+
+    用户拍照是来「问一下这是什么」的，不是来存图的：留着既占存储、也涉及隐私。
+    Guess 只存 upload_id 这个文本，没有任何地方会回读那张图（响应里也没有图片字段），
+    所以文件删掉、uploads 行删掉都不影响历史记录。
+    """
+    key = upload.object_key
+    # 先删文件（delete_bytes 是 best-effort，不会抛），再删记录 ——
+    # 顺序反了的话万一删文件失败就留下一行指向空文件的孤儿记录。
+    if key:
+        await storage.delete_bytes(key)
+    await db.delete(upload)
+    await db.commit()
+
+
 def _guess_response(guess: Guess) -> dict:
     # items 每项 = 照片里一个不同的生物，各自带自己的候选列表；
     # 老记录存的是扁平候选，stored_items 会把它包成「单物品」。
@@ -225,6 +241,8 @@ async def create_species_guess(
     newly = await evaluate_medals(db, user) if user is not None else []
     resp = _guess_response(guess)
     resp["unlockedMedalIds"] = newly
+    # 识别完了，把用户拍的那张删掉（见 _discard_upload）
+    await _discard_upload(db, upload)
     return ok(resp)
 
 
@@ -247,13 +265,14 @@ async def create_trash_guess(
     spot = await db.get(Spot, body.spotId) if body.spotId else None
     image_bytes = await storage.read_bytes(upload.object_key)
 
-    return ok(
-        await ai_trash_guess(
-            image_bytes,
-            upload.content_type,
-            spot.name if spot else "海边",
-        )
+    result = await ai_trash_guess(
+        image_bytes,
+        upload.content_type,
+        spot.name if spot else "海边",
     )
+    # 识别完了，把用户拍的那张删掉（见 _discard_upload）
+    await _discard_upload(db, upload)
+    return ok(result)
 
 
 @router.get("/ai/species-guess/{guess_id}")
