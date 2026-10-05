@@ -529,20 +529,20 @@
   /* ================= 渲染 ================= */
   function renderTabs() {
     $('tabs').innerHTML = TABS.map(function (t) {
-      // 反馈栏的角标显示该类的「未处理」条数，提示还有多少待看的
-      var n = t.src === 'fb'
-        ? (((state.fbCounts || {})[t.kind] || {}).pending || 0)
-        : (state.counts[t.key] || 0);
+      // 反馈栏顶上不标数字 —— 数量标在栏内的「未处理 / 已处理」上
+      var n = t.src === 'fb' ? '' : '<span class="n">' + (state.counts[t.key] || 0) + '</span>';
       return '<button data-tab="' + t.key + '" class="' + (state.tab === t.key ? 'active' : '') + '">' +
-        t.label + '<span class="n">' + n + '</span></button>';
+        t.label + n + '</button>';
     }).join('');
 
-    // 反馈栏里再加一层「未处理 / 已处理」
+    // 反馈栏里再加一层「未处理 / 已处理」，各自带条数
     var sub = $('fbSub');
     if (tabOf(state.tab).src === 'fb') {
+      var counts = (state.fbCounts || {})[tabOf(state.tab).kind] || {};
       sub.innerHTML = ['pending', 'handled'].map(function (s) {
         return '<button data-fbstatus="' + s + '" class="' + (state.fbStatus === s ? 'active' : '') + '">' +
-          (s === 'pending' ? '未处理' : '已处理') + '</button>';
+          (s === 'pending' ? '未处理' : '已处理') +
+          '<span class="n">' + (counts[s] || 0) + '</span></button>';
       }).join('');
       sub.classList.remove('hidden');
     } else {
