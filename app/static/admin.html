@@ -97,6 +97,33 @@
     background: var(--teal-soft); color: var(--teal-dark);
     border-color: #CFE6E4; box-shadow: none; font-weight: 600;
   }
+  /* 二级下拉：工具栏那种「当前视图 ▾」 */
+  .dropdown { position: relative; }
+  .drop-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid var(--line); background: var(--surface);
+    border-radius: 8px; padding: 6px 12px;
+    font-size: 13px; color: var(--ink-2); cursor: pointer;
+    transition: background .12s, border-color .12s;
+  }
+  .drop-btn:hover { background: #FAFAF8; border-color: #D8D5CC; }
+  .drop-btn .caret { font-size: 10px; color: var(--muted); }
+  .drop-menu {
+    position: absolute; top: calc(100% + 5px); left: 0; z-index: 30;
+    min-width: 168px; padding: 4px; box-sizing: border-box;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 10px; box-shadow: 0 10px 28px rgba(20, 22, 26, .14);
+  }
+  .drop-menu button {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    width: 100%; border: 0; background: transparent; border-radius: 7px;
+    padding: 7px 10px; font-size: 13px; color: var(--ink-2); text-align: left;
+  }
+  .drop-menu button:hover { background: #F5F5F1; }
+  .drop-menu button.active { background: var(--teal-soft); color: var(--teal-dark); font-weight: 600; }
+  .drop-menu .n { color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .drop-menu button.active .n { color: var(--teal); }
+
   /* 三级筛选（未处理 / 已处理）：最轻，纯文字 + 下划线 */
   .segmented.sub2 { background: transparent; padding: 0; gap: 2px; }
   .segmented.sub2 button {
@@ -342,8 +369,11 @@
 <div class="toolbar">
   <!-- 一级：宝藏点位 / 通用反馈 -->
   <div class="segmented" id="groups"></div>
-  <!-- 二级：宝藏点位下的 待审核 / 已通过 / 已驳回 / 审核反馈 -->
-  <div class="segmented sub hidden" id="tabs"></div>
+  <!-- 二级：下拉式（宝藏点位下才有）-->
+  <div class="dropdown hidden" id="viewDrop">
+    <button class="drop-btn" id="viewBtn"></button>
+    <div class="drop-menu hidden" id="viewMenu"></div>
+  </div>
   <!-- 三级：反馈栏才显示的 未处理 / 已处理 -->
   <div class="segmented sub2 hidden" id="fbSub"></div>
   <div class="hint" id="hint"></div>
@@ -563,20 +593,21 @@
         g.label + '</button>';
     }).join('');
 
-    // 二级：一级下不止一个视图时才显示（通用反馈下只有一个，就不占一行）
+    // 二级：下拉式（通用反馈下只有一个视图，就不显示了）
     var vs = viewsOf(state.group);
-    var tabBox = $('tabs');
+    var drop = $('viewDrop');
     if (vs.length > 1) {
-      tabBox.innerHTML = vs.map(function (t) {
-        // 反馈视图顶上不标数字 —— 数量标在「未处理 / 已处理」上
+      $('viewBtn').innerHTML = '<span>' + tabOf(state.tab).label + '</span><span class="caret">▾</span>';
+      $('viewMenu').innerHTML = vs.map(function (t) {
+        // 反馈视图不带数字 —— 数量标在下面的「未处理 / 已处理」上
         var n = t.src === 'fb' ? '' : '<span class="n">' + (state.counts[t.key] || 0) + '</span>';
         return '<button data-tab="' + t.key + '" class="' + (state.tab === t.key ? 'active' : '') + '">' +
-          t.label + n + '</button>';
+          '<span>' + t.label + '</span>' + n + '</button>';
       }).join('');
-      tabBox.classList.remove('hidden');
+      drop.classList.remove('hidden');
     } else {
-      tabBox.innerHTML = '';
-      tabBox.classList.add('hidden');
+      drop.classList.add('hidden');
+      $('viewMenu').classList.add('hidden');
     }
 
     // 三级：反馈视图才有，未处理 / 已处理，各自带条数
@@ -1064,18 +1095,29 @@
     loadList(1);
   });
 
-  $('tabs').addEventListener('click', function (e) {
+  // 二级下拉：展开 / 收起
+  $('viewBtn').addEventListener('click', function (e) {
+    e.stopPropagation(); // 别让 document 上「点别处收起」立刻把它关掉
+    $('viewMenu').classList.toggle('hidden');
+  });
+
+  $('viewMenu').addEventListener('click', function (e) {
     var b = e.target.closest('button[data-tab]');
     if (!b) return;
     state.tab = b.dataset.tab;
-    // 切到反馈栏时总是从「未处理」开始 —— 两个反馈栏之间来回切也一样，
-    // 默认落在待看的上面，免得停在「已处理」以为没新反馈。
+    // 切到反馈视图时总是从「未处理」开始 —— 免得停在「已处理」以为没新反馈
     if (tabOf(state.tab).src === 'fb') {
       state.fbStatus = 'pending';
     }
     state.selectedId = null;
+    $('viewMenu').classList.add('hidden');
     renderTabs();
     loadList(1);
+  });
+
+  // 点页面别处收起下拉
+  document.addEventListener('click', function () {
+    $('viewMenu').classList.add('hidden');
   });
 
   // 反馈栏内的二级筛选：未处理 / 已处理
