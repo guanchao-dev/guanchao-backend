@@ -789,19 +789,26 @@
     toast('这条反馈没关联到具体点位');
   }
 
-  /** 切到某个分类并选中指定投稿（跳转用） */
+  /** 切到某个分类并选中指定投稿（跳转用）
+   *
+   * 目标不一定在第一页（这一栏条目多的时候），所以一页页往后翻直到找到。
+   * 上限 20 页防死循环；翻到底还没有就说明这条投稿已经不在这一栏了。
+   */
   async function gotoTabAndSelect(tabKey, id) {
     state.tab = tabKey;
     state.page = 1;
     renderTabs();
-    await loadList(1);
-    if (findItem(id)) {
-      state.selectedId = id;
-      renderList();
-      renderDetail();
-    } else {
-      toast('这条投稿不在当前列表里（可能翻页了）');
+    for (var p = 1; p <= 20; p++) {
+      await loadList(p);
+      if (findItem(id)) {
+        state.selectedId = id;
+        renderList();
+        renderDetail();
+        return;
+      }
+      if (state.list.length >= state.total) break; // 已经到底了
     }
+    toast('这条投稿不在该分类里（可能已被删除）');
   }
 
   /** 回复用户反馈（回复后用户端「消息」会出现未读） */
