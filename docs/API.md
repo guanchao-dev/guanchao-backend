@@ -172,20 +172,84 @@ lat / lng / note / photoUrl / status / reviewNote / approvedSpotId / reviewedAt 
 - 通过后写入一条官方点位，`id` 形如 `spot_z_…`、`source="用户投稿"`、`reviewed_at=当天`、`heat` 默认 `40`。
 - 重复通过 → `409 该投稿已通过审核`；缺坐标 → `400`；`city` 为空 → `400`。
 
-#### `POST /admin/submissions/{id}/reject` — 驳回
+#### `POST /admin/submissions/{id}/reject` — 驳回 / 驳回并下架
 
 ```json
 { "reason": "位置不明确" }
 ```
 
-`reason` 可空，存入 `reviewNote`，用户端在「我的点位」能看到。已通过的投稿不能驳回
-（驳回不下架已发布的官方点位）→ `409`。
+`reason` 可空，存入 `reviewNote`，用户端在「我的点位」能看到。
+
+**已通过的也能驳回** —— 这时会把之前发布出去的官方点位**连同它的调和常数一起删掉**（下架），
+否则前台还挂着一条已经被驳回的点位。响应多一个 `unpublishedSpotId`（本次下架的点位 id；
+没下架则为空串）。重复驳回幂等。
+
+#### `GET /admin/submissions/{id}/geo` — 按坐标反查城市 / 区
+
+给「通过」弹窗自动填城市用。返回 `{city, district, address}`；投稿没有坐标时全为空串。
+
+#### `GET /admin/spots/{id}` / `POST /admin/spots/{id}/edit` — 读 / 改已发布的官方点位
+
+`edit` 是**部分更新**：只改请求体里**显式传了**的字段
+（`name` / `city` / `district` / `description` / `observeHint` / `heat`），没传的一律不动。
+`name` 或 `city` 传空串 → `400`。
 
 #### `GET /admin/stats` — 各状态计数
 
 ```json
 { "pending": 3, "approved": 12, "rejected": 1 }
 ```
+
+#### 反馈（`/admin/feedback*`）
+
+| 接口 | 说明 |
+|---|---|
+| `GET /admin/feedback?status=pending\|handled\|all` | 列表。带回 `spotName/spotCity/spotLat/spotLng`，以及**对应的那条投稿** `submissionId/submissionStatus` —— 后台据此从反馈直接跳到投稿；点位即使已下架也能定位到投稿 |
+| `GET /admin/feedback/stats` | `{pending, handled}`，给 tab 角标用 |
+| `POST /admin/feedback/{id}/handle` | body `{handled: bool}`，标记已处理 / 未处理 |
+| `POST /admin/feedback/{id}/reply` | body `{reply}`。回复后**自动标记为已处理**，并把 `replySeen` 置回 false —— 用户端「消息」随即出现一条未读 |
+
+---
+
+### 4. 宝藏地点（用户投稿并通过的点位）
+
+#### `GET /spots/treasure` — 宝藏地点列表
+
+只返回**用户投稿且审核通过**的点位，官方策展的点位不含在内。
+
+区分方式不靠 `spots.source` 的文案（管理员可以改），而是靠 `user_spots.approved_spot_id`
+反向关联 —— 只有真正走过审核的记录才会出现在这里。
+
+参数与响应结构同 `GET /spots`（支持 `lat`/`lng` 算距离、`page`/`pageSize` 分页）。
+
+---
+
+### 5. 消息（管理员对我反馈的回复）
+
+三个接口都需要登录。
+
+| 接口 | 说明 |
+|---|---|
+| `GET /me/notifications` | 我的消息列表，按回复时间倒序。分页结构外多一个 `unread`（未读数）。每项含 `content`（我写的反馈）/ `reply`（管理员回复）/ `repliedAt` / `spotId` / `spotName` / `seen` |
+| `GET /me/notifications/unread` | `{count}`，铃铛红点用 |
+| `POST /me/notifications/read` | 标记已读。body 传 `ids` 只标记这几条，不传则全部标记 |
+
+> 消息目前只有「管理员回复反馈」这一种来源。以后要加别的通知（比如投稿审核结果），
+> 往同一个列表里拼即可，**前端拿到的还是同一份结构**。
+
+---
+
+### 6. 其它新增
+
+#### `GET /geo/city?lat=&lng=` — 按坐标反查城市
+
+给首页顶部「当前城市」用。返回 `{city, district}`，查不到就返回空串。
+走服务端反查（而不是小程序直连地图服务），省得再去微信后台配域名白名单。
+
+#### `POST /help/feedback` — 提交反馈（已有接口，**新增字段**）
+
+请求体多了一个可选 `spotId`：从点位详情页的「反馈」按钮发来时带上，
+后台「反馈」栏据此显示这条反馈是针对哪个点位的。
 
 ---
 
@@ -248,8 +312,11 @@ lat / lng / note / photoUrl / status / reviewNote / approvedSpotId / reviewedAt 
 | `weatherText` | `多云` | ⚠️ 见下方说明 |
 | `tideText` | `-1.1 米` | 潮高，替代「深度」。取不到时为空串 |
 
-> ⚠️ **温度 / 天气目前是占位数据**：`get_weather` 是写死的 `{"text": "多云", "tempC": 24}`，
-> **每条记录都会显示「多云 24℃」**。接真实天气接口后这里会自动变真，前端不用改。
+> ✅ **温度 / 天气已接真实数据**：来自和风天气的逐小时预报。
+> **在观潮开始的那一刻就把天气存进了记录**（逐小时预报查不了过去的日子），
+> 所以这条记录以后翻出来还是当时的值，不会变。
+> 取不到天气时 `tempText` / `weatherText` 返回**空串**，前端留空即可 —— 不会回退成假数据。
+> ⚠️ 本次改动**之前**创建的记录这两列为空（它们以前显示的是假数据）。
 >
 > ⚠️ **`tideText` 可能是负数**：潮汐服务的原始值以平均海平面为基准，低潮时为负。
 > 直接展示成「潮高 -1.1 米」用户会困惑，建议前端改成「退潮中」或「今日 0.3~3.8 米」这类说法。
