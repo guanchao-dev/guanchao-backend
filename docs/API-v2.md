@@ -5,6 +5,16 @@
 > 一句话：新增 **13 个众筹成就**（共 18 个）；其中 **12 个服务端自动判定，前端一行不用改**；
 > 只有 1 个需要前端多调一个上报接口。
 
+## 前端待办（三件事）
+
+| # | 做什么 | 在哪 | 详 |
+|---|---|---|---|
+| 1 | 接**上报接口**（不接的话「深蓝百万里」成就永远解锁不了） | 首页点「深蓝百万里」活动卡时 | §二 |
+| 2 | 修**锁定态图标顺序**（现在锁着的勋章也露图案） | `utils/medals.ts` 的 `decorateMedal` | §五.1 |
+| 3 | 修**「解锁奖励」字段**（现在显示 ★ x0 / ◆ x1） | `utils/medals.ts` 的 `buildMedalDetail` + `medal-detail.wxml` | §五.2 |
+
+其余 12 个成就**全部由服务端自动判定**，前端不用做任何事（见 §四）。
+
 ---
 
 ## 一、13 个新成就
@@ -71,8 +81,12 @@ Authorization: Bearer <token>
 
 > 做成白名单而不是「传什么就发什么」—— 否则任何人都能拿这个接口把勋章刷满。
 
-**调用时机建议**：用户点「深蓝百万里」的入口时先上报再跳转（或跳转后异步上报都行），
-失败不用阻塞用户。
+**在哪调**：首页 `pages/home/home.ts` 的 `onActivity()` —— 点「深蓝百万里」那张活动卡时
+（按标题匹配」深蓝百万里」），和跳第三方小程序的 `wx.navigateToMiniProgram` 放在一起。
+拿到 `unlockedMedalIds` 后走首页**现成的** `enqueueUnlocks` + `flushUnlocks(this)` 弹解锁动画
+（首页已经有 `<unlock-popup id="unlockPopup">`，`utils/unlock.ts` 里也有现成实现）。
+
+**先上报再跳转**，但别等它返回 —— 跳转不依赖上报结果；未登录会 401，静默忽略即可。
 
 ---
 
@@ -131,31 +145,60 @@ Authorization: Bearer <token>
 
 ---
 
-## 五、接入时踩过的坑
+## 五、前端要改的几处（已定位到文件）
 
-### 1. 勋章现在**有图了**，锁定态要优先判
+> 下面 1、2 两条是**当前代码里实际存在的 bug**，不是理论风险 ——
+> 我按你们重构后的结构（`utils/medals.ts` + `medal-wall` / `medal-detail`）定位好了文件和行号。
 
-这 13 个成就的 `iconUrl` 都是非空的（占位图）。原来的图标回退如果写成：
+### 1. `utils/medals.ts` — 锁定的勋章会露出图案
 
-```js
-icon: item.iconUrl || (locked ? '锁图' : '图案')   // ❌
-```
-
-`||` 会把锁短路掉 —— **没解锁的成就也会露出图案**，锁状态就没了（实际踩过）。
-必须**先判锁定**：
+`decorateMedal` 里现在是：
 
 ```js
-icon: locked ? '锁图' : (item.iconUrl || '按顺序取的兜底图')   // ✅
+icon: row.icon || row.iconUrl || (locked ? LOCK_ICON : MEDAL_ICONS[index % MEDAL_ICONS.length]),   // ❌
 ```
 
-### 2. `rewards` / `description` 只有详情接口有
+`locked` 排在**第三位**。后端这轮给 13 个众筹成就配了 `iconUrl`（占位图），
+`||` 在这里直接短路返回 —— **没解锁的勋章也显示图案**，锁状态就没了。
+（老 5 个勋章 `iconUrl` 是空串，所以以前没暴露。）
+
+改成**先判锁定**：
+
+```js
+icon: locked ? LOCK_ICON : (row.icon || row.iconUrl || MEDAL_ICONS[index % MEDAL_ICONS.length]),   // ✅
+```
+
+`decorateMedal` 被 `pages/achieve` 和 `pages/medal-wall` 共用，改一处两个页面都好。
+
+### 2. 「解锁奖励」读的是后端不存在的字段
+
+`utils/medals.ts` 的 `buildMedalDetail` 里：
+
+```js
+starReward: rewards.star || 0,      // ❌ 后端没有 rewards.star
+shellReward: rewards.shell || 1     // ❌ 后端没有 rewards.shell
+```
+
+后端 `rewards` 就是 `{"score": N}`，所以现在渲染出来的是兜底值 ——
+`pages/medal-detail/medal-detail.wxml` 那块显示的是「★ x0」「◆ x1」。
+
+改成只展示经验：
+
+```js
+exp: rewards.score || 0
+```
+
+wxml 对应改成单个「经验 +{{medal.exp}}」（没有经验值时整块不显示）。
+老的 `pages/achieve` 页我看已经没这块了，只有 `medal-detail` 要改。
+
+### 3. `rewards` / `description` 只有详情接口有
 
 - `GET /medals`（列表）只返回 `id / title / rarity / iconUrl / locked / unlockedAt`
 - `GET /medals/{id}`（详情）才有 `displayTitle / description / requirements / rewards`
 
-所以「解锁奖励」（经验值 = `rewards.score`）**只能在详情弹窗里显示**，列表拿不到。
+所以经验值**只能在详情页显示**，列表拿不到。
 
-### 3. 墙上用 `title`、详情用 `displayTitle`
+### 4. 墙上用 `title`、详情用 `displayTitle`
 
 两者刻意不一样：`title` 是短名（墙上显示），`displayTitle` 是完整/带玩梗的名（详情和分享用）。
 
@@ -165,11 +208,10 @@ icon: locked ? '锁图' : (item.iconUrl || '按顺序取的兜底图')   // ✅
 | 这就是…海洋记录员？ | 海洋记录员 | 这就是…海洋记录员？ |
 | siuuuuuu～～～ | siuuuuuu | siuuuuuu～～～ |
 
-### 4. 锁定的勋章，点进详情会看到真实名称
+### 5. 锁定的勋章，点进详情会看到真实名称
 
 墙上锁着的显示 `???`，但**点进详情会显示真实的 `displayTitle` 和 `description`**
-（"告诉你怎么解锁"）。这是原有 5 个勋章就有的设计，这次没动。
-如果要连详情也遮住，说一声。
+（"告诉你怎么解锁"）。这是原有 5 个勋章就有的设计，没动。要连详情也遮住的话需要另说。
 
 ---
 
