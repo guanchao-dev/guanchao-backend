@@ -304,18 +304,30 @@ async def reject_submission(
 
 @router.get("/admin/feedback")
 async def list_feedback(
+    kind: str = Query("all"),
     status: str = Query("pending"),
     page: int = Query(1, ge=1),
     pageSize: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
-    """用户反馈列表。status: pending（未处理）/ handled（已处理）/ all。
+    """用户反馈列表。
+
+    - kind：`general` 通用反馈（「关于」页来的，没有点位）/ `review` 审核反馈
+      （点位详情页来的，带点位）/ `all`
+    - status：`pending` 未处理 / `handled` 已处理 / `all`
 
     带上点位名和城市，管理员一眼能看出是针对哪个点位的。
     """
+    if kind not in ("all", "general", "review"):
+        raise BadRequestError("kind 取值不合法")
     if status not in ("pending", "handled", "all"):
         raise BadRequestError("status 取值不合法")
+
     q = select(Feedback)
+    if kind == "general":
+        q = q.where(Feedback.spot_id == "")
+    elif kind == "review":
+        q = q.where(Feedback.spot_id != "")
     if status == "pending":
         q = q.where(Feedback.handled.is_(False))
     elif status == "handled":
@@ -375,13 +387,22 @@ async def list_feedback(
 
 @router.get("/admin/feedback/stats")
 async def feedback_stats(db: AsyncSession = Depends(get_db)):
-    """未处理 / 已处理条数，给后台 tab 上的计数用。"""
+    """按「通用 / 审核」× 「未处理 / 已处理」四宫格计数，给后台 tab 角标用。"""
     rows = (
-        await db.execute(select(Feedback.handled, func.count()).group_by(Feedback.handled))
+        await db.execute(
+            select(Feedback.spot_id, Feedback.handled, func.count()).group_by(
+                Feedback.spot_id, Feedback.handled
+            )
+        )
     ).all()
-    counts = {"pending": 0, "handled": 0}
-    for handled, n in rows:
-        counts["handled" if handled else "pending"] = n
+    counts = {
+        "general": {"pending": 0, "handled": 0},
+        "review": {"pending": 0, "handled": 0},
+    }
+    for spot_id, handled, n in rows:
+        # spot_id 为空 = 「关于」页来的通用反馈
+        bucket = "review" if spot_id else "general"
+        counts[bucket]["handled" if handled else "pending"] += n
     return ok(counts)
 
 
