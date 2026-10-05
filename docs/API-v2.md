@@ -9,21 +9,23 @@
 
 ## 一、13 个新成就
 
-| id | 成就名 | 稀有度 | 分值 | 怎么拿到 | 占位图 |
+| id | 成就名 | 稀有度 | 经验 | 怎么拿到 | 占位图 |
 |---|---|---|---|---|---|
-| `medal_6` | 蓝色青年行动 | common | 40 | **10.7–10.17 期间登录**（北京时间，含首尾） | crab-heart |
-| `medal_7` | 深蓝百万里 | common | 40 | **前端上报**（见第二节） | crab-map |
-| `medal_8` | ……好吧也比没有强 | common | 40 | 拍照识别出「石头」这类非生物 | crab-dig |
+| `medal_6` | 蓝色青年行动 | common | 30 | **10.7–10.17 期间登录**（北京时间，含首尾） | crab-heart |
+| `medal_7` | 深蓝百万里 | common | 30 | **前端上报**（见第二节） | crab-map |
+| `medal_8` | ……好吧也比没有强 | common | 30 | 拍照识别出「石头」这类非生物 | crab-dig |
 | `medal_9` | 蟹蟹！ | common | 40 | 识别到螃蟹（第 1 次） | crab-cloud |
-| `medal_10` | 蟹老板 | rare | 70 | 识别到螃蟹累计 **10** 次 | crab-crown |
+| `medal_10` | 蟹老板 | rare | 80 | 识别到螃蟹累计 **10** 次 | crab-crown |
 | `medal_11` | “海景房” | epic | 120 | **单次**识别出 3 个及以上物体 | crab-star |
-| `medal_12` | 海星拾趣 | rare | 70 | 识别到海星 | crab-heart |
-| `medal_13` | 这就是…海洋记录员？ | epic | 120 | 累计识别到 **10** 种不同生物 | crab-book |
-| `medal_14` | 深蓝小卫士 | rare | 70 | 垃圾识别且 AI 判定**确实是垃圾** | crab-helmet |
-| `medal_15` | 海的味道我知道！ | rare | 70 | 识别到紫菜 | crab-checklist |
-| `medal_16` | siuuuuuu～～～ | epic | 120 | 图鉴集齐**所有以「螺」结尾的生物** | crab-astronaut |
-| `medal_17` | 为什么我的洞口常含盐巴 | rare | 70 | 识别到蛏子 | crab-dig |
-| `medal_18` | 拍我干什么？ | rare | 70 | 识别到藤壶 | crab-search |
+| `medal_12` | 海星拾趣 | rare | 60 | 识别到海星 | crab-heart |
+| `medal_13` | 这就是…海洋记录员？ | epic | 150 | 累计识别到 **10** 种不同生物 | crab-book |
+| `medal_14` | 深蓝小卫士 | rare | 80 | 垃圾识别且 AI 判定**确实是垃圾** | crab-helmet |
+| `medal_15` | 海的味道我知道！ | rare | 60 | 识别到紫菜 | crab-checklist |
+| `medal_16` | siuuuuuu～～～ | epic | 150 | 图鉴集齐**所有以「螺」结尾的生物** | crab-astronaut |
+| `medal_17` | 为什么我的洞口常含盐巴 | rare | 60 | 识别到蛏子 | crab-dig |
+| `medal_18` | 拍我干什么？ | rare | 60 | 识别到藤壶 | crab-search |
+
+经验梯度是 **30 / 40 / 60 / 80 / 120 / 150** 六档（白送 → 一次动作 → 定向寻找 → 要攒 → 苛刻 → 集齐）。
 
 - **占位图暂时用现成的 badge 图**，正式图案出来只改 `seed.py` 里那一行 `icon_key`。
 - 「螺」类**按名录动态判定**（`Species.name` 以「螺」结尾，当前 5 个）；以后加物种，成就条件自动跟着变。
@@ -81,8 +83,14 @@ Authorization: Bearer <token>
 **内容变多了，字段结构没变**：
 
 - 勋章从 5 个变成 **18 个**
-- `achievements/overview` 的 `medalTotal` = `18`，`total`（可得分总数）= `1310`
+- `achievements/overview` 的 `medalTotal` = `18`，`total`（可得分总数）= `1320`
 - ⚠️ `percent` / `levelProgress` 的分母变成了 1310，**所有老用户的百分比会相应下降**（他们没解锁新成就）。这是预期的，不是 bug
+
+#### `GET /medals/{id}`
+
+`rewards` 字段现在就是 `{"score": N}`，**N 就是经验值** ——
+「解锁奖励」那块直接展示它即可（现在是 `经验 +N`）。
+以前那张设计稿上的 ★ 和 ◆ 两种货币后端从来没有过，已废弃。
 
 ### `POST /ai/trash-guess`
 
@@ -129,6 +137,12 @@ Authorization: Bearer <token>
 |---|---|---|---|
 | 蟹老板 | 「捡到很多只螃蟹」 | 识别到螃蟹 **10** 次 | `achievements.py::CRAB_TARGET` |
 | 这就是…海洋记录员？ | 「累计识别（）种生物」 | 累计 **10** 种 | `achievements.py::SPECIES_TARGET` |
+
+**经验值做过一次重新平衡**：原先 13 个挤在 40/70/120 三档，问题比较大
+（白送的「登录」「点链接」和真干活的「第一次捡到螃蟹」一样多；最难的「集齐螺」和
+靠运气的「海景房」都是 120；海星/紫菜/蛏子/藤壶/蟹老板/垃圾 6 个全挤在 70）。
+现在改成 **30 / 40 / 60 / 80 / 120 / 150** 六档，按「越难越稀有」铺开。
+要再调只改 `seed.py` 的 `rewards.score` —— `_sync_medal_fields` 会在启动时同步到线上。
 
 另外两点确认过的处理方式：
 

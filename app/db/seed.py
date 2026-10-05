@@ -1757,19 +1757,19 @@ MEDALS = [
         "id": "medal_6", "title": "蓝色青年行动", "display_title": "蓝色青年行动", "rarity": "common",
         "icon_key": f"{_STATIC_BASE}/badges/crab-heart.png",
         "description": "活动期间登录追潮记即可获得。",
-        "requirements": [{"text": "10.7-10.17 期间登录"}], "rewards": {"score": 40}, "sort": 6,
+        "requirements": [{"text": "10.7-10.17 期间登录"}], "rewards": {"score": 30}, "sort": 6,
     },
     {
         "id": "medal_7", "title": "深蓝百万里", "display_title": "深蓝百万里", "rarity": "common",
         "icon_key": f"{_STATIC_BASE}/badges/crab-map.png",
         "description": "点进「深蓝百万里」看一看。",
-        "requirements": [{"text": "进入「深蓝百万里」"}], "rewards": {"score": 40}, "sort": 7,
+        "requirements": [{"text": "进入「深蓝百万里」"}], "rewards": {"score": 30}, "sort": 7,
     },
     {
         "id": "medal_8", "title": "……好吧也比没有强", "display_title": "……好吧也比没有强", "rarity": "common",
         "icon_key": f"{_STATIC_BASE}/badges/crab-dig.png",
         "description": "捡到一块石头也算收获。",
-        "requirements": [{"text": "识别到一块石头"}], "rewards": {"score": 40}, "sort": 8,
+        "requirements": [{"text": "识别到一块石头"}], "rewards": {"score": 30}, "sort": 8,
     },
     {
         "id": "medal_9", "title": "蟹蟹！", "display_title": "蟹蟹！", "rarity": "common",
@@ -1781,7 +1781,7 @@ MEDALS = [
         "id": "medal_10", "title": "蟹老板", "display_title": "蟹老板", "rarity": "rare",
         "icon_key": f"{_STATIC_BASE}/badges/crab-crown.png",
         "description": "识别到很多只螃蟹，蟹老板本蟹。",
-        "requirements": [{"text": "累计识别 10 次螃蟹"}], "rewards": {"score": 70}, "sort": 10,
+        "requirements": [{"text": "累计识别 10 次螃蟹"}], "rewards": {"score": 80}, "sort": 10,
     },
     {
         "id": "medal_11", "title": "海景房", "display_title": "“海景房”", "rarity": "epic",
@@ -1793,43 +1793,43 @@ MEDALS = [
         "id": "medal_12", "title": "海星拾趣", "display_title": "海星拾趣", "rarity": "rare",
         "icon_key": f"{_STATIC_BASE}/badges/crab-heart.png",
         "description": "拍照识别到海星。",
-        "requirements": [{"text": "识别到海星"}], "rewards": {"score": 70}, "sort": 12,
+        "requirements": [{"text": "识别到海星"}], "rewards": {"score": 60}, "sort": 12,
     },
     {
         "id": "medal_13", "title": "海洋记录员", "display_title": "这就是…海洋记录员？", "rarity": "epic",
         "icon_key": f"{_STATIC_BASE}/badges/crab-book.png",
         "description": "累计识别出足够多种不同的生物。",
-        "requirements": [{"text": "累计识别 10 种不同生物"}], "rewards": {"score": 120}, "sort": 13,
+        "requirements": [{"text": "累计识别 10 种不同生物"}], "rewards": {"score": 150}, "sort": 13,
     },
     {
         "id": "medal_14", "title": "深蓝小卫士", "display_title": "深蓝小卫士", "rarity": "rare",
         "icon_key": f"{_STATIC_BASE}/badges/crab-helmet.png",
         "description": "用垃圾识别认出海边的垃圾。",
-        "requirements": [{"text": "拍照识别出海洋垃圾"}], "rewards": {"score": 70}, "sort": 14,
+        "requirements": [{"text": "拍照识别出海洋垃圾"}], "rewards": {"score": 80}, "sort": 14,
     },
     {
         "id": "medal_15", "title": "海的味道我知道", "display_title": "海的味道我知道！", "rarity": "rare",
         "icon_key": f"{_STATIC_BASE}/badges/crab-checklist.png",
         "description": "拍照识别到紫菜。",
-        "requirements": [{"text": "识别到紫菜"}], "rewards": {"score": 70}, "sort": 15,
+        "requirements": [{"text": "识别到紫菜"}], "rewards": {"score": 60}, "sort": 15,
     },
     {
         "id": "medal_16", "title": "siuuuuuu", "display_title": "siuuuuuu～～～", "rarity": "epic",
         "icon_key": f"{_STATIC_BASE}/badges/crab-astronaut.png",
         "description": "把图鉴里所有以「螺」结尾的生物都集齐。",
-        "requirements": [{"text": "集齐图鉴中所有「螺」类生物"}], "rewards": {"score": 120}, "sort": 16,
+        "requirements": [{"text": "集齐图鉴中所有「螺」类生物"}], "rewards": {"score": 150}, "sort": 16,
     },
     {
         "id": "medal_17", "title": "洞口常含盐巴", "display_title": "为什么我的洞口常含盐巴", "rarity": "rare",
         "icon_key": f"{_STATIC_BASE}/badges/crab-dig.png",
         "description": "抓到蛏子并拍照识别。",
-        "requirements": [{"text": "识别到蛏子"}], "rewards": {"score": 70}, "sort": 17,
+        "requirements": [{"text": "识别到蛏子"}], "rewards": {"score": 60}, "sort": 17,
     },
     {
         "id": "medal_18", "title": "拍我干什么", "display_title": "拍我干什么？", "rarity": "rare",
         "icon_key": f"{_STATIC_BASE}/badges/crab-search.png",
         "description": "拍照识别到藤壶。",
-        "requirements": [{"text": "识别到藤壶"}], "rewards": {"score": 70}, "sort": 18,
+        "requirements": [{"text": "识别到藤壶"}], "rewards": {"score": 60}, "sort": 18,
     },
 ]
 
@@ -1952,6 +1952,23 @@ async def _sync_spot_fields(session: AsyncSession) -> None:
             spot.lng = item["lng"]
 
 
+async def _sync_medal_fields(session: AsyncSession) -> None:
+    """同步已入库勋章的分值与稀有度（幂等，覆盖旧值）。
+
+    分值和稀有度是「数值平衡」，会随着设计调整；而 _seed_missing 只插不改，
+    光改这个文件线上已有的勋章不会变 —— 所以单独同步一次。
+
+    ⚠️ 刻意**不同步 icon_key**：众筹成就的图现在还是占位图，正式图案很可能是
+    直接换库/换文件，同步会把人工替换的结果覆盖回去。
+    """
+    for item in MEDALS:
+        medal = await session.get(Medal, item["id"])
+        if medal is None:
+            continue
+        medal.rarity = item["rarity"]
+        medal.rewards = item["rewards"]
+
+
 async def seed_if_empty(session: AsyncSession) -> None:
     """按主键补齐种子数据（幂等）。表里已有的行不会被覆盖。"""
     await _seed_missing(session, Spot, SPOTS)
@@ -1963,6 +1980,7 @@ async def seed_if_empty(session: AsyncSession) -> None:
     await _seed_missing(session, Quiz, QUIZZES)
     await _seed_missing(session, QuizQuestion, QUIZ_QUESTIONS)
     await _seed_missing(session, Medal, MEDALS)
+    await _sync_medal_fields(session)
     await _seed_missing(session, CommunityTopic, COMMUNITY_TOPICS)
     await _seed_missing(session, Knowledge, KNOWLEDGE)
     await _seed_missing(session, LightMap, LIGHT_MAPS)
