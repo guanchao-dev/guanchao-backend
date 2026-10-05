@@ -64,6 +64,9 @@ class Spot(Base):
     lat: Mapped[float] = mapped_column(Float, nullable=True)
     lng: Mapped[float] = mapped_column(Float, nullable=True)
     heat: Mapped[int] = mapped_column(Integer, default=0)
+    # 点位的照片（对象存储的 object key 列表）。用户投稿通过审核时从 UserSpot 复制过来，
+    # 最多 3 张。老的 cover_key 仍然会写第一张，兼容只认它的地方。
+    photo_keys: Mapped[list] = mapped_column(JSON, default=list)
 
 
 class UserSpot(Base):
@@ -85,6 +88,8 @@ class UserSpot(Base):
     address: Mapped[str] = mapped_column(String(255), default="")
     note: Mapped[str] = mapped_column(Text, default="")
     photo_url: Mapped[str] = mapped_column(String(255), default="")
+    # 用户上传的照片：对象存储的 object key 列表，0~3 张
+    photo_keys: Mapped[list] = mapped_column(JSON, default=list)
     lat: Mapped[float] = mapped_column(Float, nullable=True)
     lng: Mapped[float] = mapped_column(Float, nullable=True)
     # 审核状态：pending（待审）| approved（已发布）| rejected（已驳回）

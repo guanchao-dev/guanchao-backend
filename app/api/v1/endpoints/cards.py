@@ -80,12 +80,12 @@ def _image_media_type(object_key: str) -> str:
 async def _generate_cover_background(user_id: str, card_id: str, upload_object_key: str) -> None:
     """后台把用户照片转成卡通插画并回写卡片（不阻塞接口响应），失败则保留原照片。"""
     try:
-        original = storage.read_bytes(upload_object_key)
+        original = await storage.read_bytes(upload_object_key)
         image_bytes = await generate_card_cover(original)
         if not image_bytes:
             return
         object_key = f"private/{user_id}/card/{card_id}_ai.png"
-        storage.save_bytes(object_key, image_bytes)
+        await storage.save_bytes(object_key, image_bytes)
         async with async_session_factory() as session:
             card = await session.get(Card, card_id)
             if card is not None:
@@ -137,7 +137,7 @@ async def create_card(
 
     spot_name = await _spot_name(db, body.spotId)
     tide_line = await _tide_line(body.spotId)
-    image_bytes = storage.read_bytes(upload.object_key)
+    image_bytes = await storage.read_bytes(upload.object_key)
     # primary_candidates：新结构取「每件生物的首选」（天然是不同物种），
     # 老记录（扁平候选）原样返回，语义与改造前一致。
     guess_names = (
@@ -243,7 +243,7 @@ async def card_image(card_id: str, db: AsyncSession = Depends(get_db)):
     if card is None or not card.cover_key:
         raise NotFoundError("图鉴卡图片不存在")
     try:
-        data = storage.read_bytes(card.cover_key)
+        data = await storage.read_bytes(card.cover_key)
     except FileNotFoundError:
         raise NotFoundError("图片文件不存在")
     return Response(content=data, media_type=_image_media_type(card.cover_key))

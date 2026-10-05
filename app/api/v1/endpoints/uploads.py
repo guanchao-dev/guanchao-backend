@@ -1,11 +1,14 @@
-"""上传：本地磁盘存储（后续可换 COS）。
+"""上传：图片存腾讯云 COS，没配就回退本地磁盘（见 app/services/storage.py）。
 
 提供三条链路：
-- POST /uploads（multipart，本地开发直传）
-- POST /uploads/credential + POST /uploads/{uploadId}/complete（对齐文档的 COS 直传协议）
+- POST /uploads（multipart，直传）
+- POST /uploads/credential + POST /uploads/{uploadId}/complete（对齐 COS 直传协议）
+- GET /media/{key}（**只在回退本地磁盘时**才会被用到；配了 COS 就是 CDN 直链）
 
 游客可用：以 X-Client-Id 识别，owner_id 记 user:{id} 或 client:{id}。
 """
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,10 +25,20 @@ from app.services.image import compress_image
 
 router = APIRouter(tags=["uploads"])
 
+# 本地磁盘模式下图片直链的根目录
+_MEDIA_ROOT = Path("data/uploads")
+_MEDIA_TYPES = {
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "webp": "image/webp",
+    "gif": "image/gif",
+}
+
 ALLOWED_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 EXT_CONTENT_TYPES = {"jpg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
 MAX_SIZE = 5 * 1024 * 1024
-SCENES = ("speciesGuess", "observation", "card", "community")
+SCENES = ("speciesGuess", "observation", "card", "community", "spot")
 
 
 def _sniff_ext(data: bytes) -> str | None:
@@ -70,7 +83,7 @@ async def upload_file(
     content_type = EXT_CONTENT_TYPES.get(ext, "image/jpeg")
     upload_id = new_id("up")
     object_key = _object_key(owner_id, scene, upload_id, ext)
-    storage.save_bytes(object_key, data)
+    await storage.save_bytes(object_key, data)
     db.add(
         Upload(
             id=upload_id,
@@ -159,6 +172,26 @@ async def upload_complete(
     )
 
 
+@router.get("/media/{file_path:path}")
+async def media_content(file_path: str):
+    """本地磁盘模式下的图片直链。
+
+    `storage.public_url()` 在没配 COS 时返回 /media/{object_key}，就走这里。
+    配了 COS 的话图片走 CDN 绝对地址，不会落到这个路由。
+    """
+    root = _MEDIA_ROOT.resolve()
+    target = (root / file_path).resolve()
+    # 目录穿越防护：resolve 之后必须还在 root 下面（与 assets.py 同一套做法）
+    if not str(target).startswith(str(root)) or not target.is_file():
+        raise NotFoundError("文件不存在")
+    ext = target.suffix.lstrip(".").lower()
+    return Response(
+        content=target.read_bytes(),
+        media_type=_MEDIA_TYPES.get(ext, "application/octet-stream"),
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
 @router.get("/uploads/{upload_id}/content")
 async def upload_content(upload_id: str, db: AsyncSession = Depends(get_db)):
     """本地取回已上传的图片（对齐 COS 的对象读取）。"""
@@ -166,7 +199,7 @@ async def upload_content(upload_id: str, db: AsyncSession = Depends(get_db)):
     if upload is None:
         raise NotFoundError("上传不存在")
     try:
-        data = storage.read_bytes(upload.object_key)
+        data = await storage.read_bytes(upload.object_key)
     except FileNotFoundError:
         raise NotFoundError("文件不存在")
     return Response(content=data, media_type=upload.content_type or "application/octet-stream")

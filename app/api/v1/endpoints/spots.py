@@ -9,9 +9,13 @@ from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.response import ok, paginated
 from app.core.utils import new_id, to_shanghai_iso
 from app.db.base import get_db
-from app.db.models import Spot, UserSpot
+from app.db.models import Spot, Upload, UserSpot
 from app.schemas import UserSpotCreateRequest
+from app.services import storage
 from app.services.content_safety import assert_text_safe
+
+# 一条投稿最多几张图
+_MAX_PHOTOS = 3
 
 router = APIRouter(tags=["spots"])
 
@@ -28,6 +32,8 @@ def _user_spot_item(s: UserSpot) -> dict:
         "lng": s.lng,
         "note": s.note,
         "photoUrl": s.photo_url,
+        # 用户上传的照片（最多 3 张）。photoUrl 保留成第一张，兼容只认它的老调用方。
+        "photos": [storage.public_url(k) for k in (s.photo_keys or []) if k],
         # 审核状态：前端「我的点位」据此显示 审核中/已通过/未通过 徽章。
         "status": s.status or "pending",
         "reviewNote": s.review_note,
@@ -47,6 +53,10 @@ def _haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> int:
 def _spot_list_item(s: Spot, lat: float | None, lng: float | None) -> dict:
     has_loc = lat is not None and lng is not None and s.lat is not None and s.lng is not None
     distance = _haversine(lat, lng, s.lat, s.lng) if has_loc else None
+    # 照片：优先 photo_keys（用户投稿审核通过的多图）；没有就退回老的单图 cover_key
+    photos = [storage.public_url(k) for k in (s.photo_keys or []) if k]
+    if not photos and s.cover_key:
+        photos = [storage.public_url(s.cover_key)]
     return {
         "id": s.id,
         "name": s.name,
@@ -57,8 +67,8 @@ def _spot_list_item(s: Spot, lat: float | None, lng: float | None) -> dict:
         "latitude": s.lat,
         "longitude": s.lng,
         "distanceM": distance,
-        "coverUrl": s.cover_key,
-        "photos": [s.cover_key] if s.cover_key else [],
+        "coverUrl": photos[0] if photos else "",
+        "photos": photos,
         "openTime": s.open_time,
         "ageHint": s.age_hint,
         "safetyTags": s.safety_tags or [],
@@ -129,6 +139,21 @@ async def create_user_spot(
     if count >= _MAX_USER_SPOTS:
         raise BadRequestError(f"上传的点位已达上限（{_MAX_USER_SPOTS} 个）")
 
+    # 照片（可选，最多 3 张）：逐个校验归属和状态，存 object key 而不是用户传的 URL ——
+    # key 由服务端解析，避免客户端塞任意地址进来。
+    upload_ids = [u for u in (body.photoUploadIds or []) if u]
+    if len(upload_ids) > _MAX_PHOTOS:
+        raise BadRequestError(f"最多上传 {_MAX_PHOTOS} 张照片")
+    photo_keys: list[str] = []
+    for uid in upload_ids:
+        up = await db.get(Upload, uid)
+        if up is None or up.owner_id != owner_id:
+            raise NotFoundError("图片不存在")
+        if up.status != "approved":
+            raise BadRequestError("图片尚未上传完成")
+        if up.object_key:
+            photo_keys.append(up.object_key)
+
     s = UserSpot(
         id=new_id("usp"),
         owner_id=owner_id,
@@ -136,6 +161,7 @@ async def create_user_spot(
         address=address[:255],
         note=note[:1000],
         photo_url=(body.photoUrl or "").strip()[:255],
+        photo_keys=photo_keys,
         lat=float(body.lat),
         lng=float(body.lng),
     )

@@ -220,6 +220,15 @@
   .note-box.accent { background: var(--teal-soft); border-color: #CFE6E4; }
   .note-box.warn { background: var(--red-soft); border-color: #EFD6CF; color: var(--red); }
   .reply-hint { margin-bottom: 8px; color: var(--faint); font-size: 12.5px; }
+  /* 投稿照片缩略图 */
+  .photo-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .photo-thumb { display: block; line-height: 0; }
+  .photo-thumb img {
+    width: 112px; height: 112px; object-fit: cover; display: block;
+    border: 1px solid var(--line); border-radius: 10px; background: #F5F5F1;
+    transition: border-color .12s;
+  }
+  .photo-thumb:hover img { border-color: var(--teal); }
   /* 可点击的文字（反馈里的点位名 → 跳到那条投稿） */
   .link { color: var(--teal); text-decoration: underline; cursor: pointer; }
   .link:hover { color: var(--teal-dark); }
@@ -740,6 +749,11 @@
               : '<div class="note-box" style="color:var(--faint)">用户没有填写备注</div>') +
       '</div>';
 
+    // 用户上传的照片（最多 3 张）。点开看大图。
+    html += '<div class="section"><div class="section-label">用户上传的照片' +
+      (s.photos && s.photos.length ? '（' + s.photos.length + '）' : '') + '</div>' +
+      photosHtml(s.photos) + '</div>';
+
     if (s.status === 'rejected' && s.reviewNote) {
       html += '<div class="section"><div class="section-label">驳回原因</div>' +
         '<div class="note-box warn">' + esc(s.reviewNote) + '</div></div>';
@@ -783,6 +797,12 @@
       $('mOk').textContent = '确认发布';
       $('mOk').className = 'btn primary';
       $('mBody').innerHTML =
+        // 先把要发布的照片摆出来，管理员确认要发的就是这些
+        (item.photos && item.photos.length
+          ? '<div class="field"><label>将发布的照片（' + item.photos.length + ' 张）</label>' +
+            photosHtml(item.photos) +
+            '<div class="tip">通过后这些照片会出现在小程序的点位详情里</div></div>'
+          : '') +
         '<div class="field"><label>点位名称<span class="req">*</span></label>' +
           '<input id="fName" maxlength="64" value="' + esc(item.name) + '"></div>' +
         '<div class="two-col">' +
@@ -865,6 +885,17 @@
       }
     }
     return { city: m ? m[1] : '', district: district };
+  }
+
+  /** 一排图片缩略图；没有就提示一下。点开原图。 */
+  function photosHtml(list) {
+    if (!list || !list.length) {
+      return '<div class="reply-hint">用户没有上传照片</div>';
+    }
+    return '<div class="photo-row">' + list.map(function (u) {
+      return '<a class="photo-thumb" href="' + esc(u) + '" target="_blank" rel="noopener">' +
+        '<img src="' + esc(u) + '" alt="" loading="lazy"></a>';
+    }).join('') + '</div>';
   }
 
   /** 反馈里点点位名：直接跳到后台里对应的那条投稿；找不到再退到地图 */

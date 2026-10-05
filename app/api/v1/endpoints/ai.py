@@ -194,7 +194,7 @@ async def create_species_guess(
     ]
     # 地理限制：按用户定位判断是否在海边，过滤掉当地不可能出现的物种
     coastal = await _is_coastal(db, body.lat, body.lng, spot)
-    image_bytes = storage.read_bytes(upload.object_key)
+    image_bytes = await storage.read_bytes(upload.object_key)
 
     result = await ai_species_guess(
         image_bytes,
@@ -245,7 +245,7 @@ async def create_trash_guess(
     if upload is None or upload.owner_id != owner_id:
         raise NotFoundError("上传不存在")
     spot = await db.get(Spot, body.spotId) if body.spotId else None
-    image_bytes = storage.read_bytes(upload.object_key)
+    image_bytes = await storage.read_bytes(upload.object_key)
 
     return ok(
         await ai_trash_guess(

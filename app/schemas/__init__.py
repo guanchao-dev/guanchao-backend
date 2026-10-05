@@ -222,6 +222,8 @@ class UserSpotCreateRequest(BaseModel):
     lng: float | None = None
     note: str | None = None
     photoUrl: str | None = None
+    # 用户上传的照片：先各自 POST /uploads 拿到的 uploadId，最多 3 张（也可以不传）
+    photoUploadIds: list[str] | None = None
 
 
 class SpeciesSeenRequest(BaseModel):

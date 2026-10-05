@@ -178,7 +178,7 @@ async def upload_avatar(
     data, ext = compress_image(data)
     content_type = EXT_CONTENT_TYPES.get(ext, "image/jpeg")
     object_key = f"private/{user.id}/avatar/avatar.{ext}"
-    storage.save_bytes(object_key, data)
+    await storage.save_bytes(object_key, data)
     user.avatar_key = object_key
     await db.commit()
     return ok({"avatarUrl": _avatar_url(user), "contentType": content_type})
@@ -207,7 +207,7 @@ async def user_avatar(user_id: str, db: AsyncSession = Depends(get_db)):
     if u is None or not u.avatar_key:
         raise NotFoundError("头像不存在")
     try:
-        data = storage.read_bytes(u.avatar_key)
+        data = await storage.read_bytes(u.avatar_key)
     except FileNotFoundError:
         raise NotFoundError("头像不存在")
     low = u.avatar_key.lower()
@@ -284,7 +284,7 @@ async def delete_me(user: User = Depends(get_current_user), db: AsyncSession = D
     # 7) 删磁盘文件（best-effort，失败不影响注销结果）
     for key in object_keys:
         try:
-            storage.delete_bytes(key)
+            await storage.delete_bytes(key)
         except Exception:
             pass
 

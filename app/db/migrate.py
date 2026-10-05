@@ -16,6 +16,8 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("heat", "INT NOT NULL DEFAULT 0"),
         # 所属区（崂山区/黄岛区/…）。热度排名按区分组，前端展示也要用
         ("district", "VARCHAR(32) NOT NULL DEFAULT ''"),
+        # 点位照片（对象存储 object key 的列表，最多 3 张）
+        ("photo_keys", "JSON NULL"),
     ],
     "watch_records": [
         ("spot_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
@@ -60,6 +62,8 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("reviewed_at", "VARCHAR(32) NOT NULL DEFAULT ''"),
         ("approved_spot_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
         ("review_note", "VARCHAR(255) NOT NULL DEFAULT ''"),
+        # 用户上传的照片（对象存储 object key 的列表，0~3 张）
+        ("photo_keys", "JSON NULL"),
     ],
 }
 

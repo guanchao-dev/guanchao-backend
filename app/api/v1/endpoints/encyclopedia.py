@@ -255,7 +255,7 @@ async def species_cover(species_id: str, db: AsyncSession = Depends(get_db)):
     if s is None or not s.cover_key:
         raise NotFoundError("图鉴图片不存在")
     try:
-        data = storage.read_bytes(s.cover_key)
+        data = await storage.read_bytes(s.cover_key)
     except FileNotFoundError:
         raise NotFoundError("图片文件不存在")
     return Response(content=data, media_type=_image_media_type(s.cover_key))
@@ -285,7 +285,7 @@ async def upload_species_photo(
     content_type = EXT_CONTENT_TYPES.get(ext, "image/jpeg")
     photo_id = new_id("sph")
     object_key = _species_photo_object_key(user.id, species_id, photo_id, ext)
-    storage.save_bytes(object_key, data)
+    await storage.save_bytes(object_key, data)
     photo = SpeciesPhoto(
         id=photo_id,
         user_id=user.id,
@@ -339,7 +339,7 @@ async def species_photo_content(species_id: str, photo_id: str, db: AsyncSession
     if photo is None or photo.species_id != species_id:
         raise NotFoundError("图片不存在")
     try:
-        data = storage.read_bytes(photo.object_key)
+        data = await storage.read_bytes(photo.object_key)
     except FileNotFoundError:
         raise NotFoundError("图片文件不存在")
     return Response(content=data, media_type=photo.content_type or "application/octet-stream")
@@ -359,5 +359,5 @@ async def delete_species_photo(
     await db.delete(photo)
     await db.commit()
     if object_key:
-        storage.delete_bytes(object_key)
+        await storage.delete_bytes(object_key)
     return ok(None, "已删除")

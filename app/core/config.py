@@ -50,5 +50,12 @@ class Settings(BaseSettings):
     # 管理后台（审核用户投稿的宝藏点位）。留空则相关接口一律拒绝访问。
     admin_token: str = ""
 
+    # 腾讯云 COS（对象存储）。**四项都填齐才启用**；缺任何一项就回退本地磁盘，
+    # 免得漏配一个环境变量整个上传功能就挂了（见 app/services/storage.py）。
+    cos_bucket: str = ""
+    cos_region: str = ""
+    cos_secret_id: str = ""
+    cos_secret_key: str = ""
+
 
 settings = Settings()

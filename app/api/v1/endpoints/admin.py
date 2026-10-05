@@ -23,7 +23,7 @@ from app.schemas import (
     RejectSubmissionRequest,
     ReplyFeedbackRequest,
 )
-from app.services import amap
+from app.services import amap, storage
 from app.services.content_safety import assert_text_safe
 from app.services.tide_predict import harmonics_from_coords
 
@@ -51,6 +51,8 @@ def _admin_item(s: UserSpot) -> dict:
         "lng": s.lng,
         "note": s.note,
         "photoUrl": s.photo_url,
+        # 用户上传的照片（最多 3 张），后台审核时展示
+        "photos": [storage.public_url(k) for k in (s.photo_keys or []) if k],
         "status": s.status,
         "reviewNote": s.review_note,
         "approvedSpotId": s.approved_spot_id,
@@ -162,7 +164,9 @@ async def approve_submission(
         name=name[:64],
         city=city[:32],
         district=district[:32],
-        cover_key=(s.photo_url or "")[:255],
+        # 第一张同时写进 cover_key：兼容只认单图 cover_key 的老逻辑
+        cover_key=((s.photo_keys[0] if s.photo_keys else "") or s.photo_url or "")[:255],
+        photo_keys=list(s.photo_keys or []),
         open_time=(body.openTime or "").strip()[:128],
         age_hint=(body.ageHint or "").strip()[:128],
         safety_tags=body.safetyTags or [],
