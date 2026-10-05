@@ -119,18 +119,24 @@ async def save_bytes(object_key: str, data: bytes) -> str:
 
 
 async def read_bytes(object_key: str) -> bytes:
-    """读不到抛 FileNotFoundError（调用方据此返回 404）。"""
+    """读不到抛 FileNotFoundError（调用方据此返回 404）。
+
+    COS 上找不到时会**回退读本地磁盘**：启用 COS 之前上传的图片都还在服务器上，
+    不回退的话那批老图会全部 404（这个坑踩过一次）。
+    """
     if cos_enabled():
-        return await asyncio.to_thread(_cos_read, object_key)
+        try:
+            return await asyncio.to_thread(_cos_read, object_key)
+        except FileNotFoundError:
+            pass
     return await asyncio.to_thread(_local_read, object_key)
 
 
 async def delete_bytes(object_key: str) -> None:
-    """删除文件（best-effort，不存在则忽略）。"""
-    try:
-        if cos_enabled():
-            await asyncio.to_thread(_cos_delete, object_key)
-        else:
-            await asyncio.to_thread(_local_delete, object_key)
-    except Exception:  # noqa: BLE001  删不掉不该影响主流程
-        pass
+    """删除文件（best-effort，不存在则忽略）。两边都试着删一下，别留孤儿文件。"""
+    targets = (_cos_delete, _local_delete) if cos_enabled() else (_local_delete,)
+    for fn in targets:
+        try:
+            await asyncio.to_thread(fn, object_key)
+        except Exception:  # noqa: BLE001  删不掉不该影响主流程
+            pass
