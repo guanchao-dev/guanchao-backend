@@ -131,7 +131,49 @@ Authorization: Bearer <token>
 
 ---
 
-## 五、我们替你定的两个数（设计表里留空/含糊）
+## 五、接入时踩过的坑
+
+### 1. 勋章现在**有图了**，锁定态要优先判
+
+这 13 个成就的 `iconUrl` 都是非空的（占位图）。原来的图标回退如果写成：
+
+```js
+icon: item.iconUrl || (locked ? '锁图' : '图案')   // ❌
+```
+
+`||` 会把锁短路掉 —— **没解锁的成就也会露出图案**，锁状态就没了（实际踩过）。
+必须**先判锁定**：
+
+```js
+icon: locked ? '锁图' : (item.iconUrl || '按顺序取的兜底图')   // ✅
+```
+
+### 2. `rewards` / `description` 只有详情接口有
+
+- `GET /medals`（列表）只返回 `id / title / rarity / iconUrl / locked / unlockedAt`
+- `GET /medals/{id}`（详情）才有 `displayTitle / description / requirements / rewards`
+
+所以「解锁奖励」（经验值 = `rewards.score`）**只能在详情弹窗里显示**，列表拿不到。
+
+### 3. 墙上用 `title`、详情用 `displayTitle`
+
+两者刻意不一样：`title` 是短名（墙上显示），`displayTitle` 是完整/带玩梗的名（详情和分享用）。
+
+| 成就 | `title`（墙） | `displayTitle`（详情） |
+|---|---|---|
+| “海景房” | 海景房 | “海景房” |
+| 这就是…海洋记录员？ | 海洋记录员 | 这就是…海洋记录员？ |
+| siuuuuuu～～～ | siuuuuuu | siuuuuuu～～～ |
+
+### 4. 锁定的勋章，点进详情会看到真实名称
+
+墙上锁着的显示 `???`，但**点进详情会显示真实的 `displayTitle` 和 `description`**
+（"告诉你怎么解锁"）。这是原有 5 个勋章就有的设计，这次没动。
+如果要连详情也遮住，说一声。
+
+---
+
+## 六、我们替你定的两个数（设计表里留空/含糊）
 
 | 成就 | 表里写的 | 我们暂定 | 改哪 |
 |---|---|---|---|
