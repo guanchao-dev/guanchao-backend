@@ -97,6 +97,16 @@
     background: var(--teal-soft); color: var(--teal-dark);
     border-color: #CFE6E4; box-shadow: none; font-weight: 600;
   }
+  /* 三级筛选（未处理 / 已处理）：最轻，纯文字 + 下划线 */
+  .segmented.sub2 { background: transparent; padding: 0; gap: 2px; }
+  .segmented.sub2 button {
+    border: 0; background: transparent; border-radius: 0;
+    padding: 4px 8px; font-size: 12.5px; color: var(--muted);
+  }
+  .segmented.sub2 button.active {
+    background: transparent; color: var(--teal-dark); font-weight: 700;
+    box-shadow: inset 0 -2px 0 var(--teal);
+  }
   .segmented {
     display: inline-flex; padding: 3px; gap: 2px;
     background: #EAE9E3; border-radius: 9px;
@@ -330,9 +340,12 @@
 </header>
 
 <div class="toolbar">
-  <div class="segmented" id="tabs"></div>
-  <!-- 反馈栏才显示的二级筛选：未处理 / 已处理 -->
-  <div class="segmented sub hidden" id="fbSub"></div>
+  <!-- 一级：宝藏点位 / 通用反馈 -->
+  <div class="segmented" id="groups"></div>
+  <!-- 二级：宝藏点位下的 待审核 / 已通过 / 已驳回 / 审核反馈 -->
+  <div class="segmented sub hidden" id="tabs"></div>
+  <!-- 三级：反馈栏才显示的 未处理 / 已处理 -->
+  <div class="segmented sub2 hidden" id="fbSub"></div>
   <div class="hint" id="hint"></div>
 </div>
 
@@ -376,24 +389,40 @@
   // 令牌只存在内存里，不落 localStorage：每次打开/刷新页面都必须重新输入。
   var _token = '';
   var LABEL = { pending: '待审核', approved: '已通过', rejected: '已驳回' };
+  // 两级导航：一级 = 宝藏点位 / 通用反馈；二级 = 一级下面的具体视图。
   // src: sub = 投稿（/admin/submissions），fb = 用户反馈（/admin/feedback）
-  // 反馈分两类：通用（「关于」页来的，没点位）/ 审核（点位详情页来的，带点位）
-  var TABS = [
-    { key: 'pending', label: '待审核', src: 'sub' },
-    { key: 'approved', label: '已通过', src: 'sub' },
-    { key: 'rejected', label: '已驳回', src: 'sub' },
-    { key: 'fb_review', label: '审核反馈', src: 'fb', kind: 'review' },
-    { key: 'fb_general', label: '通用反馈', src: 'fb', kind: 'general' }
+  var GROUPS = [
+    { key: 'spots', label: '宝藏点位' },
+    { key: 'general', label: '通用反馈' }
   ];
+  var VIEWS = {
+    spots: [
+      { key: 'pending', label: '待审核', src: 'sub' },
+      { key: 'approved', label: '已通过', src: 'sub' },
+      { key: 'rejected', label: '已驳回', src: 'sub' },
+      { key: 'fb_review', label: '审核反馈', src: 'fb', kind: 'review' }
+    ],
+    // 通用反馈一级下只有一个视图，二级那一行就不显示了
+    general: [{ key: 'fb_general', label: '通用反馈', src: 'fb', kind: 'general' }]
+  };
   var PAGE_SIZE = 50;
 
+  function viewsOf(group) {
+    return VIEWS[group] || VIEWS.spots;
+  }
+
   function tabOf(key) {
-    for (var i = 0; i < TABS.length; i++) if (TABS[i].key === key) return TABS[i];
-    return TABS[0];
+    for (var g = 0; g < GROUPS.length; g++) {
+      var vs = viewsOf(GROUPS[g].key);
+      for (var i = 0; i < vs.length; i++) if (vs[i].key === key) return vs[i];
+    }
+    return VIEWS.spots[0];
   }
 
   var state = {
-    tab: 'pending', page: 1, total: 0, list: [], counts: {}, fbCounts: {},
+    group: 'spots',
+    tab: 'pending',
+    page: 1, total: 0, list: [], counts: {}, fbCounts: {},
     // 反馈栏里再分「未处理 / 已处理」
     fbStatus: 'pending',
     selectedId: null, mode: null, busy: false
@@ -528,14 +557,29 @@
 
   /* ================= 渲染 ================= */
   function renderTabs() {
-    $('tabs').innerHTML = TABS.map(function (t) {
-      // 反馈栏顶上不标数字 —— 数量标在栏内的「未处理 / 已处理」上
-      var n = t.src === 'fb' ? '' : '<span class="n">' + (state.counts[t.key] || 0) + '</span>';
-      return '<button data-tab="' + t.key + '" class="' + (state.tab === t.key ? 'active' : '') + '">' +
-        t.label + n + '</button>';
+    // 一级：宝藏点位 / 通用反馈
+    $('groups').innerHTML = GROUPS.map(function (g) {
+      return '<button data-group="' + g.key + '" class="' + (state.group === g.key ? 'active' : '') + '">' +
+        g.label + '</button>';
     }).join('');
 
-    // 反馈栏里再加一层「未处理 / 已处理」，各自带条数
+    // 二级：一级下不止一个视图时才显示（通用反馈下只有一个，就不占一行）
+    var vs = viewsOf(state.group);
+    var tabBox = $('tabs');
+    if (vs.length > 1) {
+      tabBox.innerHTML = vs.map(function (t) {
+        // 反馈视图顶上不标数字 —— 数量标在「未处理 / 已处理」上
+        var n = t.src === 'fb' ? '' : '<span class="n">' + (state.counts[t.key] || 0) + '</span>';
+        return '<button data-tab="' + t.key + '" class="' + (state.tab === t.key ? 'active' : '') + '">' +
+          t.label + n + '</button>';
+      }).join('');
+      tabBox.classList.remove('hidden');
+    } else {
+      tabBox.innerHTML = '';
+      tabBox.classList.add('hidden');
+    }
+
+    // 三级：反馈视图才有，未处理 / 已处理，各自带条数
     var sub = $('fbSub');
     if (tabOf(state.tab).src === 'fb') {
       var counts = (state.fbCounts || {})[tabOf(state.tab).kind] || {};
@@ -1006,6 +1050,19 @@
   $('modal').addEventListener('click', function (e) { if (e.target === $('modal')) closeModal(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
   $('moreBtn').addEventListener('click', function () { loadList(state.page + 1); });
+
+  // 一级导航：宝藏点位 / 通用反馈
+  $('groups').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-group]');
+    if (!b) return;
+    state.group = b.dataset.group;
+    // 切一级时落到该组的第一个视图，并回到「未处理」
+    state.tab = viewsOf(state.group)[0].key;
+    state.fbStatus = 'pending';
+    state.selectedId = null;
+    renderTabs();
+    loadList(1);
+  });
 
   $('tabs').addEventListener('click', function (e) {
     var b = e.target.closest('button[data-tab]');
