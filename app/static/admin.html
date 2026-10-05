@@ -89,15 +89,10 @@
   }
   .toolbar-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .toolbar-row .hint { margin-left: auto; }
-  /* 二级筛选（未处理 / 已处理）：比主 tab 轻一点 */
-  .segmented.sub { background: transparent; padding: 0; gap: 6px; }
-  .segmented.sub button {
-    border: 1px solid var(--line); background: var(--surface);
-    border-radius: 8px; padding: 4px 12px; font-size: 12.5px;
-  }
-  .segmented.sub button.active {
-    background: var(--teal-soft); color: var(--teal-dark);
-    border-color: #CFE6E4; box-shadow: none; font-weight: 600;
+  /* 二级、三级这两行缩进 + 一道竖线：把「属于上面那个板块」表达出来 */
+  #rowTabs, #rowFbSub {
+    padding-left: 14px;
+    border-left: 2px solid var(--line);
   }
   /* 三级筛选（未处理 / 已处理）：最轻，纯文字 + 下划线 */
   .segmented.sub2 { background: transparent; padding: 0; gap: 2px; }
@@ -127,6 +122,18 @@
     color: var(--faint); min-width: 14px; text-align: center;
   }
   .segmented button.active .n { color: var(--teal); font-weight: 600; }
+
+  /* ===== 一级：深色实心胶囊，视觉最重 —— 一眼看出在哪个大板块 ===== */
+  .segmented.primary { background: transparent; padding: 0; gap: 8px; }
+  .segmented.primary button {
+    border: 0; background: transparent; border-radius: 999px;
+    padding: 7px 18px; font-size: 14px; font-weight: 600; color: var(--muted);
+  }
+  .segmented.primary button:hover { background: #EDECE6; color: var(--ink-2); }
+  .segmented.primary button.active {
+    background: var(--ink); color: #FFFFFF; font-weight: 650;
+    box-shadow: 0 2px 6px rgba(20, 22, 26, .18);
+  }
   .toolbar .hint { color: var(--muted); font-size: 12.5px; margin-left: auto; }
   .dot-live { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #26A96C; margin-right: 6px; vertical-align: 1px; }
 
@@ -344,12 +351,12 @@
 <div class="toolbar">
   <!-- 第一行：一级（宝藏点位 / 通用反馈）-->
   <div class="toolbar-row">
-    <div class="segmented" id="groups"></div>
+    <div class="segmented primary" id="groups"></div>
     <div class="hint" id="hint"></div>
   </div>
   <!-- 第二行：二级（宝藏点位下的 待审核 / 已通过 / 已驳回 / 审核反馈）-->
   <div class="toolbar-row hidden" id="rowTabs">
-    <div class="segmented sub" id="tabs"></div>
+    <div class="segmented" id="tabs"></div>
   </div>
   <!-- 第三行：三级（反馈视图下的 未处理 / 已处理）-->
   <div class="toolbar-row hidden" id="rowFbSub">
