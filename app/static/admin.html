@@ -82,11 +82,13 @@
   .btn:disabled { opacity: .5; cursor: default; }
 
   /* ---------- 工具条 ---------- */
+  /* 工具栏：每一级各占一行，层级一目了然 */
   .toolbar {
-    display: flex; align-items: center; gap: 14px;
-    flex-wrap: wrap;              /* 反馈栏多了一层，窄屏要能换行 */
+    display: flex; flex-direction: column; gap: 10px;
     padding: 14px 22px 0;
   }
+  .toolbar-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .toolbar-row .hint { margin-left: auto; }
   /* 二级筛选（未处理 / 已处理）：比主 tab 轻一点 */
   .segmented.sub { background: transparent; padding: 0; gap: 6px; }
   .segmented.sub button {
@@ -97,33 +99,6 @@
     background: var(--teal-soft); color: var(--teal-dark);
     border-color: #CFE6E4; box-shadow: none; font-weight: 600;
   }
-  /* 二级下拉：工具栏那种「当前视图 ▾」 */
-  .dropdown { position: relative; }
-  .drop-btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    border: 1px solid var(--line); background: var(--surface);
-    border-radius: 8px; padding: 6px 12px;
-    font-size: 13px; color: var(--ink-2); cursor: pointer;
-    transition: background .12s, border-color .12s;
-  }
-  .drop-btn:hover { background: #FAFAF8; border-color: #D8D5CC; }
-  .drop-btn .caret { font-size: 10px; color: var(--muted); }
-  .drop-menu {
-    position: absolute; top: calc(100% + 5px); left: 0; z-index: 30;
-    min-width: 168px; padding: 4px; box-sizing: border-box;
-    background: var(--surface); border: 1px solid var(--line);
-    border-radius: 10px; box-shadow: 0 10px 28px rgba(20, 22, 26, .14);
-  }
-  .drop-menu button {
-    display: flex; align-items: center; justify-content: space-between; gap: 14px;
-    width: 100%; border: 0; background: transparent; border-radius: 7px;
-    padding: 7px 10px; font-size: 13px; color: var(--ink-2); text-align: left;
-  }
-  .drop-menu button:hover { background: #F5F5F1; }
-  .drop-menu button.active { background: var(--teal-soft); color: var(--teal-dark); font-weight: 600; }
-  .drop-menu .n { color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; }
-  .drop-menu button.active .n { color: var(--teal); }
-
   /* 三级筛选（未处理 / 已处理）：最轻，纯文字 + 下划线 */
   .segmented.sub2 { background: transparent; padding: 0; gap: 2px; }
   .segmented.sub2 button {
@@ -367,16 +342,19 @@
 </header>
 
 <div class="toolbar">
-  <!-- 一级：宝藏点位 / 通用反馈 -->
-  <div class="segmented" id="groups"></div>
-  <!-- 二级：下拉式（宝藏点位下才有）-->
-  <div class="dropdown hidden" id="viewDrop">
-    <button class="drop-btn" id="viewBtn"></button>
-    <div class="drop-menu hidden" id="viewMenu"></div>
+  <!-- 第一行：一级（宝藏点位 / 通用反馈）-->
+  <div class="toolbar-row">
+    <div class="segmented" id="groups"></div>
+    <div class="hint" id="hint"></div>
   </div>
-  <!-- 三级：反馈栏才显示的 未处理 / 已处理 -->
-  <div class="segmented sub2 hidden" id="fbSub"></div>
-  <div class="hint" id="hint"></div>
+  <!-- 第二行：二级（宝藏点位下的 待审核 / 已通过 / 已驳回 / 审核反馈）-->
+  <div class="toolbar-row hidden" id="rowTabs">
+    <div class="segmented sub" id="tabs"></div>
+  </div>
+  <!-- 第三行：三级（反馈视图下的 未处理 / 已处理）-->
+  <div class="toolbar-row hidden" id="rowFbSub">
+    <div class="segmented sub2" id="fbSub"></div>
+  </div>
 </div>
 
 <main class="split">
@@ -593,36 +571,35 @@
         g.label + '</button>';
     }).join('');
 
-    // 二级：下拉式（通用反馈下只有一个视图，就不显示了）
+    // 第二行：二级标签（通用反馈下只有一个视图，整行就不显示）
     var vs = viewsOf(state.group);
-    var drop = $('viewDrop');
+    var row2 = $('rowTabs');
     if (vs.length > 1) {
-      $('viewBtn').innerHTML = '<span>' + tabOf(state.tab).label + '</span><span class="caret">▾</span>';
-      $('viewMenu').innerHTML = vs.map(function (t) {
-        // 反馈视图不带数字 —— 数量标在下面的「未处理 / 已处理」上
+      $('tabs').innerHTML = vs.map(function (t) {
+        // 反馈视图不带数字 —— 数量标在下面「未处理 / 已处理」上
         var n = t.src === 'fb' ? '' : '<span class="n">' + (state.counts[t.key] || 0) + '</span>';
         return '<button data-tab="' + t.key + '" class="' + (state.tab === t.key ? 'active' : '') + '">' +
-          '<span>' + t.label + '</span>' + n + '</button>';
+          t.label + n + '</button>';
       }).join('');
-      drop.classList.remove('hidden');
+      row2.classList.remove('hidden');
     } else {
-      drop.classList.add('hidden');
-      $('viewMenu').classList.add('hidden');
+      $('tabs').innerHTML = '';
+      row2.classList.add('hidden');
     }
 
-    // 三级：反馈视图才有，未处理 / 已处理，各自带条数
-    var sub = $('fbSub');
+    // 第三行：三级（反馈视图才有，未处理 / 已处理，各自带条数）
+    var row3 = $('rowFbSub');
     if (tabOf(state.tab).src === 'fb') {
       var counts = (state.fbCounts || {})[tabOf(state.tab).kind] || {};
-      sub.innerHTML = ['pending', 'handled'].map(function (s) {
+      $('fbSub').innerHTML = ['pending', 'handled'].map(function (s) {
         return '<button data-fbstatus="' + s + '" class="' + (state.fbStatus === s ? 'active' : '') + '">' +
           (s === 'pending' ? '未处理' : '已处理') +
           '<span class="n">' + (counts[s] || 0) + '</span></button>';
       }).join('');
-      sub.classList.remove('hidden');
+      row3.classList.remove('hidden');
     } else {
-      sub.innerHTML = '';
-      sub.classList.add('hidden');
+      $('fbSub').innerHTML = '';
+      row3.classList.add('hidden');
     }
     $('hint').innerHTML = '<span class="dot-live"></span>服务端已连接';
   }
@@ -1095,13 +1072,8 @@
     loadList(1);
   });
 
-  // 二级下拉：展开 / 收起
-  $('viewBtn').addEventListener('click', function (e) {
-    e.stopPropagation(); // 别让 document 上「点别处收起」立刻把它关掉
-    $('viewMenu').classList.toggle('hidden');
-  });
-
-  $('viewMenu').addEventListener('click', function (e) {
+  // 二级标签：待审核 / 已通过 / 已驳回 / 审核反馈
+  $('tabs').addEventListener('click', function (e) {
     var b = e.target.closest('button[data-tab]');
     if (!b) return;
     state.tab = b.dataset.tab;
@@ -1110,14 +1082,8 @@
       state.fbStatus = 'pending';
     }
     state.selectedId = null;
-    $('viewMenu').classList.add('hidden');
     renderTabs();
     loadList(1);
-  });
-
-  // 点页面别处收起下拉
-  document.addEventListener('click', function () {
-    $('viewMenu').classList.add('hidden');
   });
 
   // 反馈栏内的二级筛选：未处理 / 已处理
