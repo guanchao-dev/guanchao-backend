@@ -74,8 +74,17 @@
 无参数。按创建时间倒序。
 
 ```json
-{ "list": [ { "id": "usp_…", "name": "…", "…": "…" } ] }
+{ "list": [ { "id": "usp_…", "name": "…", "status": "pending",
+              "reviewNote": "", "reviewedAt": "", "…": "…" } ] }
 ```
+
+| 字段 | 说明 |
+|---|---|
+| `status` | 审核状态：`pending` 审核中 / `approved` 已通过 / `rejected` 未通过 |
+| `reviewNote` | 驳回原因（`rejected` 时可能有） |
+| `reviewedAt` | 审核日期 `YYYY-MM-DD`，未审核为空 |
+
+> 「我的点位」页据此显示状态徽章。被驳回的投稿**不计入**每人 100 个的上传上限。
 
 #### `DELETE /spots/{spot_id}` — 删除点位
 
@@ -124,6 +133,59 @@
 
 > 前端建议：**打开某个物种的详情页时**标记那一个，而不是图鉴列表一渲染就把整批标记掉 ——
 > 后者会让用户还没看清就失去「新」的状态，效果也就看不到了。
+
+---
+
+### 3. 管理后台：审核宝藏点位
+
+管理员审核用户上传的宝藏点位，通过后**发布成官方点位**（写进 `spots` 表），前台的
+`GET /spots` 立刻可见，小程序无需改动。
+
+**鉴权**：所有 `/admin/*` 接口都需要请求头 `X-Admin-Token`，值等于后端 `.env` 的
+`ADMIN_TOKEN`。**未配置 `ADMIN_TOKEN` 时一律 401**（不会因为两边都是空串而放行）。
+令牌只走请求头，不要用 query 传（会进访问日志）。
+
+**页面**：浏览器打开 `<域名>/admin`，输入令牌即可操作（页面本身公开可加载，但无令牌调不动任何接口）。
+
+#### `GET /admin/submissions` — 投稿列表
+
+| 参数 | 默认 | 说明 |
+|---|---|---|
+| `status` | `pending` | `pending` / `approved` / `rejected` / `all` |
+| `page` / `pageSize` | 1 / 20 | 分页，`pageSize` 上限 100 |
+
+返回标准分页结构 `{ list, page, pageSize, total }`，每项含 `id / ownerId / name / address /
+lat / lng / note / photoUrl / status / reviewNote / approvedSpotId / reviewedAt / createdAt`。
+
+#### `POST /admin/submissions/{id}/approve` — 通过并发布
+
+```json
+{ "name": "礁石湾", "city": "青岛", "district": "崂山区",
+  "description": "退潮有小螃蟹", "observeHint": "低潮前后两小时最佳" }
+```
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `city` | ✅ | `spots.city` 非空且无默认值，必须由管理员确认 |
+| 其余 | | 缺省时回退用户原值（`name`←投稿名，`observeHint`←`note`，`description`←`address`） |
+
+- 通过后写入一条官方点位，`id` 形如 `spot_z_…`、`source="用户投稿"`、`reviewed_at=当天`、`heat` 默认 `40`。
+- 重复通过 → `409 该投稿已通过审核`；缺坐标 → `400`；`city` 为空 → `400`。
+
+#### `POST /admin/submissions/{id}/reject` — 驳回
+
+```json
+{ "reason": "位置不明确" }
+```
+
+`reason` 可空，存入 `reviewNote`，用户端在「我的点位」能看到。已通过的投稿不能驳回
+（驳回不下架已发布的官方点位）→ `409`。
+
+#### `GET /admin/stats` — 各状态计数
+
+```json
+{ "pending": 3, "approved": 12, "rejected": 1 }
+```
 
 ---
 
@@ -312,16 +374,16 @@
 观潮记录有本地缓存（离线也能记）。本地记录没有 `seq` / `dateText` 等字段，
 渲染时按空值处理即可，不要假定一定有。
 
-**④ ⚠️ 新增的 41 个点位，潮汐数据目前是「占位」的**
+**④ ✅ 每个点位的潮汐已各自独立（原「占位」问题已解决）**
 
-潮汐不是调第三方接口，而是用 **EOT20 天文潮模型按点位离线计算**的 ——
-每个点位要在 `app/services/tide.py` 的 `SPOT_TO_SITE` 里映射到一个站点，
-站点再对应 `tide_predict.py` 里 `SITE_HARMONICS` 的 17 个分潮谐波常数。
+潮汐不是调第三方接口，而是用 **FES2022b 中国近海版天文潮模型离线计算**的。
+每个点位的调和常数由 `tools/build_spot_harmonics.py` 按其经纬度从 1/30° 网格
+取最近有效格点生成，落在 `app/services/spot_harmonics.py`（**自动生成，勿手改**）。
 
-**现在只有 4 个站点、只映射了 4 个点位**，新加的 41 个**全部落到默认站点**
-`qingdao_first_beach`（第一海水浴场）。实测三个相距几十公里的点位
-（会场赶海园·即墨 / 鱼鸣嘴·黄岛 / 滨海公园·即墨）潮高与低潮时刻**与一浴一字不差**。
+- 42 个点位**全部**有自己的常数（顾家岛码头无坐标，借用一浴的）；
+- 相隔几十公里的点位，潮高与低潮时刻**不再相同**；
+- 用户投稿过审后新增的点位不在表里，`tide_predict.resolve_spot` 会**就近兜底**
+  到最近的有点位；想精确就把它补进 `seed.py` 的 `SPOTS` 再重跑生成脚本。
 
-**影响**：这 41 个点位的「是否适合赶海」「推荐时间」「离场时间」都是不准的。
-等拿到每个点位的潮汐谐波常数（或按经纬度从 EOT20 提取）后补进映射表即可，
-**接口和前端都不用再改**。
+数值口径：结果是**相对 FES2022b 模型平均面**的潮位偏差（米），**不是**海图基准上的
+绝对潮高，低潮可为负。显示相对变化没问题，别当绝对海拔用。

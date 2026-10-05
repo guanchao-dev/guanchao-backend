@@ -1,7 +1,8 @@
 """潮汐服务 + 出门建议规则兜底模板。
 
-- 潮汐：按赶海点位用 EOT20 天文潮模型离线计算（见 tide_predict.SITE_HARMONICS），
-  通过 spot→site 映射切换，不同点位潮汐曲线与高低潮各自独立，无需第三方 API。
+- 潮汐：按赶海点位用 FES2022b 天文潮模型离线计算（见 tide_predict / spot_harmonics）。
+  每个点位有自己的调和常数，潮汐曲线与高低潮各自独立，无需第三方 API。
+  表里没有的点位（如用户投稿过审后新增的）由 tide_predict.resolve_spot 就近兜底。
 - 天气：仍为 mock（暂未接第三方）。
 """
 from calendar import monthrange
@@ -10,24 +11,33 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 
 from app.core.utils import SHANGHAI_TZ, new_id, to_shanghai_iso
-from app.db.models import TideCache
-from app.services.tide_predict import predict as eot20_predict
-from app.services.tide_predict import predict_series as eot20_predict_series
+from app.services.weather import line as weather_line
+from app.db.models import SpotHarmonics, TideCache
+from app.services.tide_predict import (
+    is_known,
+    predict,
+    predict_series,
+    register_harmonics,
+    resolve_spot,
+)
 
-TIDE_SOURCE = "EOT20 天文潮模型"
-
-# spot_id -> site_id（交付包 data/multisite_eot20_selected_grids.csv 的四地点）
-SPOT_TO_SITE = {
-    "spot_qd_yigong": "qingdao_first_beach",
-    "spot_qd_shilaoren": "qingdao_shilaoren",
-    "spot_qd_luqinghe": "qingdao_liuqinghe",
-    "spot_wh_chengshantou": "weihai_chengshantou",
-}
-_DEFAULT_SITE = "qingdao_first_beach"
+TIDE_SOURCE = "FES2022b 天文潮模型"
 
 
-def spot_to_site(spot_id: str) -> str:
-    return SPOT_TO_SITE.get(spot_id, _DEFAULT_SITE)
+async def _resolve_site(db, spot_id: str, lat: float | None = None, lng: float | None = None) -> str:
+    """解析出用于查调和常数的点位 id。
+
+    优先用库里存的（用户新点位审核通过时按坐标算出来的）；没有才退回静态表 / 就近兜底。
+    只有「静态表和运行时登记里都没有」的点位才查一次库 —— 42 个种子点位不会多这次查询。
+    """
+    if db is not None and not is_known(spot_id):
+        row = await db.get(SpotHarmonics, spot_id)
+        if row is not None and row.data:
+            register_harmonics(
+                spot_id,
+                {k: (float(v[0]), float(v[1])) for k, v in row.data.items()},
+            )
+    return resolve_spot(spot_id, lat, lng)
 
 
 def _minutes(t: str) -> int:
@@ -72,8 +82,8 @@ def _rise_time_after_low(tide: dict, low_time: str, rise_m: float = _LEAVE_RISE_
         base = _bjt_from_hhmm(date_str, low_time)
         span = 4 * 60
         times = [base + timedelta(minutes=m) for m in range(1, span + 1)]
-        heights = eot20_predict_series(site, times)
-        target = eot20_predict(site, base) + rise_m
+        heights = predict_series(site, times)
+        target = predict(site, base) + rise_m
     except Exception:
         return None
     for offset, h in enumerate(heights, start=1):
@@ -109,7 +119,7 @@ def _site_hourly(site_id: str, date_str: str) -> list[dict]:
     """某地点某北京日期的逐时潮位（24 个整点）。"""
     base = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=SHANGHAI_TZ)
     return [
-        {"time": f"{h:02d}:00", "heightM": round(eot20_predict(site_id, base.replace(hour=h)), 3)}
+        {"time": f"{h:02d}:00", "heightM": round(predict(site_id, base.replace(hour=h)), 3)}
         for h in range(24)
     ]
 
@@ -119,7 +129,7 @@ def _site_points(site_id: str, date_str: str) -> list[dict]:
     base = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=SHANGHAI_TZ)
     pts: list[tuple[int, float]] = []
     for i in range(-20, 24 * 60 + 20, 10):
-        pts.append((i, eot20_predict(site_id, base + timedelta(minutes=i))))
+        pts.append((i, predict(site_id, base + timedelta(minutes=i))))
 
     out: list[dict] = []
     for i in range(1, len(pts) - 1):
@@ -144,7 +154,7 @@ def _daily_extremes(site_id: str, date_str: str) -> tuple[list[str], list[str]]:
     base = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=SHANGHAI_TZ)
     pts: list[tuple[int, float]] = []
     for i in range(-20, 24 * 60 + 20, 10):
-        pts.append((i, eot20_predict(site_id, base + timedelta(minutes=i))))
+        pts.append((i, predict(site_id, base + timedelta(minutes=i))))
 
     lows: list[str] = []
     highs: list[str] = []
@@ -220,12 +230,15 @@ async def _load_tide_cache(db, spot_id: str, date_str: str) -> list[dict] | None
     return hourly if hourly else None
 
 
-async def get_tide(spot_id: str, day: str | None = None, db=None) -> dict:
-    """获取指定日期的潮汐（EOT20 天文潮，按点位离线计算，无需第三方）。
+async def get_tide(
+    spot_id: str, day: str | None = None, db=None, lat: float | None = None, lng: float | None = None
+) -> dict:
+    """获取指定日期的潮汐（FES2022b 天文潮，按点位离线计算，无需第三方）。
 
+    lat/lng 可选：点位不在调和常数表里时（用户投稿新增的），用它就近兜底。
     返回统一结构：source / updatedAt / dataDate / currentHeightM / trend / points / hourly。
     """
-    site = spot_to_site(spot_id)
+    site = await _resolve_site(db, spot_id, lat, lng)
     now = datetime.now(SHANGHAI_TZ)
     date_str = day or now.strftime("%Y-%m-%d")
     hourly = _site_hourly(site, date_str)
@@ -248,21 +261,23 @@ async def get_tide(spot_id: str, day: str | None = None, db=None) -> dict:
     return tide
 
 
-async def get_tide_window(spot_id: str, now: datetime, db) -> dict:
-    """组装以 now 为中心的 ±12 小时滚动潮汐窗口（EOT20 按点位离线计算，自洽连续）。
+async def get_tide_window(
+    spot_id: str, now: datetime, db, lat: float | None = None, lng: float | None = None
+) -> dict:
+    """组装以 now 为中心的 ±12 小时滚动潮汐窗口（FES2022b 按点位离线计算，自洽连续）。
 
     - hourly：跨午夜、按时间升序的 24h 显示曲线；
     - points：今天的高低潮点（供赶海建议/AI 使用，避免跨午夜 HH:MM 歧义）。
     """
     now = now.astimezone(SHANGHAI_TZ)
-    site = spot_to_site(spot_id)
+    site = await _resolve_site(db, spot_id, lat, lng)
     today_str = now.strftime("%Y-%m-%d")
 
     start = (now - timedelta(hours=12)).replace(minute=0, second=0, microsecond=0)
     pts: list[tuple[datetime, float]] = []
     t = start
     while t <= now + timedelta(hours=12):
-        pts.append((t, eot20_predict(site, t)))
+        pts.append((t, predict(site, t)))
         t += timedelta(hours=1)
 
     hourly = [{"time": dt.strftime("%H:%M"), "heightM": round(h, 3)} for dt, h in pts]
@@ -280,10 +295,6 @@ async def get_tide_window(spot_id: str, now: datetime, db) -> dict:
         "hourly": hourly,
         "windowHours": 24,
     }
-
-
-def get_weather(spot_id: str, day) -> dict:
-    return {"text": "多云", "tempC": 24, "windScale": 3, "windDir": "东南", "waveHint": "轻浪"}
 
 
 def _next_change(points: list, now: datetime) -> dict:
@@ -396,6 +407,8 @@ def build_fallback_advice(tide: dict, weather: dict, now: datetime) -> dict:
     height = tide["currentHeightM"]
     rising = trend == "rising"
     nxt = _next_change(tide["points"], now)
+    # 天气短语；取不到就是空串，下面整句不显示
+    wx_line = weather_line(weather)
 
     if rising:
         headline = "现在正在涨潮，先别下到礁石区"
@@ -433,7 +446,8 @@ def build_fallback_advice(tide: dict, weather: dict, now: datetime) -> dict:
         "suitableForLowerGrade": True,
         "leaveBefore": leave_before,
         "nextChange": nxt,
-        "weatherLine": f"今天{weather['text']}、{weather['windDir']}风 {weather['windScale']} 级、{weather['waveHint']}，体感较舒适。",
+        # 天气取不到时整句不显示（weather.line 返回空串）
+        "weatherLine": (f"今天{wx_line}，体感较舒适。" if wx_line else ""),
         "safetyLine": "请由大人陪同；不要独自下水；以现场警示和官方预警为准。",
         "disclaimer": "潮汐与天气仅供参考，出海或近水活动请以海洋预报和现场管理为准。",
         "generatedBy": "rule",
@@ -454,9 +468,11 @@ def _observe_hint(lows: list[str]) -> str:
     return "退潮时段注意观察"
 
 
-def tide_calendar(spot_id: str, month: str) -> dict:
-    """生成某月每天的潮时（EOT20 天文潮，按点位）。month 形如 2026-08。"""
-    site = spot_to_site(spot_id)
+async def tide_calendar(
+    spot_id: str, month: str, lat: float | None = None, lng: float | None = None, db=None
+) -> dict:
+    """生成某月每天的潮时（FES2022b 天文潮，按点位）。month 形如 2026-08。"""
+    site = await _resolve_site(db, spot_id, lat, lng)
     year, mon = int(month[:4]), int(month[5:7])
     days = []
     for d in range(1, monthrange(year, mon)[1] + 1):

@@ -1,16 +1,20 @@
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 
 from app.api.v1.router import api_router
-from app.core.exceptions import register_exception_handlers
+from app.core.exceptions import NotFoundError, register_exception_handlers
 from app.db import models  # noqa: F401  确保模型注册到 Base.metadata
 from app.db.base import Base, async_session_factory, engine
 from app.db.migrate import run_migrations
 from app.db.seed import seed_if_empty
 
 logger = logging.getLogger(__name__)
+
+_ADMIN_HTML = Path(__file__).resolve().parent / "static" / "admin.html"
 
 
 async def _step(name: str, coro) -> None:
@@ -48,3 +52,12 @@ app.include_router(api_router, prefix="/api/v1")
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/admin", include_in_schema=False)
+async def admin_page():
+    """管理后台页面。公开可加载，但没有 ADMIN_TOKEN 时调用任何接口都会 401，不泄露数据。"""
+    if not _ADMIN_HTML.is_file():
+        raise NotFoundError("管理页面未部署")
+    # no-store：页面本身不含令牌，但避免中间层缓存一份旧的审核界面。
+    return FileResponse(_ADMIN_HTML, media_type="text/html", headers={"Cache-Control": "no-store"})

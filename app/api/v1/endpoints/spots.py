@@ -28,6 +28,10 @@ def _user_spot_item(s: UserSpot) -> dict:
         "lng": s.lng,
         "note": s.note,
         "photoUrl": s.photo_url,
+        # 审核状态：前端「我的点位」据此显示 审核中/已通过/未通过 徽章。
+        "status": s.status or "pending",
+        "reviewNote": s.review_note,
+        "reviewedAt": s.reviewed_at,
         "createdAt": to_shanghai_iso(s.created_at),
     }
 
@@ -114,9 +118,12 @@ async def create_user_spot(
     assert_text_safe(name, address, note)
 
     _, owner_id = identity
+    # 只数「有效」投稿：被驳回的不该继续占用配额，否则用户被驳回几次后就传不动了。
     count = (
         await db.execute(
-            select(func.count()).select_from(UserSpot).where(UserSpot.owner_id == owner_id)
+            select(func.count())
+            .select_from(UserSpot)
+            .where(UserSpot.owner_id == owner_id, UserSpot.status != "rejected")
         )
     ).scalar() or 0
     if count >= _MAX_USER_SPOTS:
@@ -156,6 +163,37 @@ async def my_user_spots(
         )
     ).scalars().all()
     return ok({"list": [_user_spot_item(s) for s in rows]})
+
+
+@router.get("/spots/treasure")
+async def list_treasure_spots(
+    lat: float | None = Query(None),
+    lng: float | None = Query(None),
+    page: int = Query(1, ge=1),
+    pageSize: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """「宝藏地点」：用户投稿、管理员审核通过后发布出来的点位。
+
+    与官方策展点位的区分不靠 spots.source 的文案（管理员可改），而是靠
+    user_spots.approved_spot_id 反向关联 —— 只有走过审核的记录才会出现在这里。
+
+    ⚠️ 必须声明在 /spots/{spot_id} 之前，否则 "treasure" 会被当成点位 ID。
+    """
+    q = (
+        select(Spot)
+        .join(UserSpot, UserSpot.approved_spot_id == Spot.id)
+        .where(UserSpot.status == "approved")
+    )
+    total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar() or 0
+    rows = (
+        await db.execute(
+            q.order_by(UserSpot.reviewed_at.desc(), Spot.id.desc())
+            .offset((page - 1) * pageSize)
+            .limit(pageSize)
+        )
+    ).scalars().all()
+    return ok(paginated([_spot_list_item(s, lat, lng) for s in rows], page, pageSize, total))
 
 
 @router.delete("/spots/{spot_id}")

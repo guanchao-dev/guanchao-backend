@@ -89,6 +89,26 @@ class GuardianConsentRequest(BaseModel):
 class FeedbackRequest(BaseModel):
     content: str
     contact: str | None = None
+    # 从点位详情页的「反馈」按钮发来时带上，便于管理员对上是哪个点位
+    spotId: str | None = None
+
+
+class HandleFeedbackRequest(BaseModel):
+    """管理员标记某条反馈是否已处理。"""
+
+    handled: bool = True
+
+
+class ReplyFeedbackRequest(BaseModel):
+    """管理员回复用户反馈。回复后用户端「消息」里会有未读。"""
+
+    reply: str
+
+
+class ReadNotificationsRequest(BaseModel):
+    """把消息标记为已读。不传 ids 就全部标记。"""
+
+    ids: list[str] | None = None
 
 
 class ReportCheckinRequest(BaseModel):
@@ -208,3 +228,43 @@ class SpeciesSeenRequest(BaseModel):
     """把图鉴里已经展示过的「新获得」物种标记为已看过。"""
 
     speciesIds: list[str] | None = None
+
+
+class ApproveSubmissionRequest(BaseModel):
+    """管理后台审核通过一条宝藏点位投稿，并发布到官方 spots 表。
+
+    `city` 必填：spots.city 非空且无默认值，必须由管理员确认。
+    其余字段缺省时回退用户原值（name 用投稿名、observeHint 用 note、description 用 address）。
+    """
+
+    name: str | None = None
+    city: str
+    district: str | None = None
+    observeHint: str | None = None
+    description: str | None = None
+    openTime: str | None = None
+    ageHint: str | None = None
+    safetyTags: list | None = None
+    heat: int | None = None
+    source: str | None = None
+
+
+class RejectSubmissionRequest(BaseModel):
+    """驳回一条投稿，reason 为可选原因（存进 review_note）。"""
+
+    reason: str | None = None
+
+
+class EditSpotRequest(BaseModel):
+    """编辑已发布的官方点位。
+
+    只更新**显式传了**的字段（按 Pydantic 的 model_fields_set 判断），没传的不动，
+    这样前端只发要改的字段也行。
+    """
+
+    name: str | None = None
+    city: str | None = None
+    district: str | None = None
+    description: str | None = None
+    observeHint: str | None = None
+    heat: int | None = None

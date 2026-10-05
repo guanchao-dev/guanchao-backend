@@ -18,6 +18,8 @@ from app.services.geo import normalize_polygon
 _SEARCH_URL = "https://restapi.amap.com/v3/place/text"
 # AOI 边界查询（高阶服务，开通后使用）。endpoint 可配，便于按高德实际下发的地址调整。
 _AOI_URL = "https://restapi.amap.com/v3/place/aoi"
+# 逆地理编码：坐标 -> 行政区划（审核后台自动填「城市 / 区」用）
+_RECEO_URL = "https://restapi.amap.com/v3/geocode/regeo"
 
 
 def enabled() -> bool:
@@ -68,6 +70,48 @@ async def search_poi(keyword: str, city: str = "", limit: int = 10) -> list[dict
             }
         )
     return out
+
+
+async def regeo(lat: float, lng: float) -> dict:
+    """逆地理编码：坐标 -> {"city", "district", "address"}。
+
+    查不到（未配置 Key / 网络失败 / 高德报错）一律返回空串，由调用方决定回退。
+    注意：高德对没有「市」一级的行政区（直辖市的个别情况）会把 city 返回成空数组，
+    所以这里对 city/district 都做了「可能是空数组」的兼容，否则会直接崩。
+    """
+    empty = {"city": "", "district": "", "address": ""}
+    if not enabled():
+        return empty
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            resp = await client.get(
+                _RECEO_URL,
+                params={
+                    "key": settings.amap_key,
+                    "location": f"{lng},{lat}",  # 高德是「经度,纬度」
+                    "extensions": "base",
+                },
+            )
+        data = resp.json()
+    except Exception:
+        return empty
+    if str(data.get("status")) != "1":
+        return empty
+    regeocode = data.get("regeocode") or {}
+    comp = regeocode.get("addressComponent") or {}
+
+    def _first(v) -> str:
+        if isinstance(v, list):
+            return (v[0] if v else "") or ""
+        return v or ""
+
+    # 直辖市（北京/上海/天津/重庆）没有 city，用 province 兜底
+    city = _first(comp.get("city")) or _first(comp.get("province"))
+    return {
+        "city": city,
+        "district": _first(comp.get("district")),
+        "address": regeocode.get("formatted_address") or "",
+    }
 
 
 async def get_aoi_polygon(poi_id: str) -> list[list[float]]:

@@ -36,12 +36,19 @@ class Settings(BaseSettings):
     tide_location_id: str = "P2717"
     tide_api_key: str = ""
 
+    # 和风天气逐小时预报（观潮记录的天气/温度、首页天气、出行建议都用它）
+    weather_api_host: str = "https://nq3jpjg4yq.re.qweatherapi.com"
+    weather_api_key: str = ""
+
     # 高德地图 Web 服务（地点搜索 + AOI 边界）。留空则签到用圆形围栏，自动降级。
     amap_key: str = ""
 
     # AI 生图（通义万相 wanx，DashScope 原生异步接口）
     image_gen_model: str = "wanx2.1-t2i-plus"
     image_edit_model: str = "wanx2.1-imageedit"
+
+    # 管理后台（审核用户投稿的宝藏点位）。留空则相关接口一律拒绝访问。
+    admin_token: str = ""
 
 
 settings = Settings()

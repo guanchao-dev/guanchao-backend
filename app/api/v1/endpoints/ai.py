@@ -22,7 +22,8 @@ from app.services.ai import primary_candidates, stored_items
 from app.services.ai import species_guess as ai_species_guess
 from app.services.ai import trash_guess as ai_trash_guess
 from app.services.ai import tide_advice
-from app.services.tide import build_beachcombing_hint, get_tide, get_weather
+from app.services import weather as weather_svc
+from app.services.tide import build_beachcombing_hint, get_tide
 
 router = APIRouter(tags=["ai"])
 
@@ -134,8 +135,8 @@ async def ai_tide_advice(body: TideAdviceRequest, db: AsyncSession = Depends(get
     if spot is None:
         raise NotFoundError("点位不存在")
 
-    tide = await get_tide(spot.id, body.date)
-    weather = get_weather(spot.id, body.date)
+    tide = await get_tide(spot.id, body.date, lat=spot.lat, lng=spot.lng)
+    weather = await weather_svc.current(spot.lat, spot.lng)
     now = datetime.now(SHANGHAI_TZ)
     spot_info = {
         "name": spot.name,

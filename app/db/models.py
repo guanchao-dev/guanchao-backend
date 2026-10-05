@@ -72,6 +72,9 @@ class UserSpot(Base):
     刻意与官方策展的 spots 表分开：spots 里的内容是审核过的（有 source / reviewed_at），
     用户上传的未审核内容混进去会污染公开的 GET /spots 列表。
     归属用 owner_id（user:{id} 或 client:{id}），与 WatchRecord / ReportCheckin 一致。
+
+    审核：后台可通过审核把这条投稿发布成官方 spots 里的一行（approved_spot_id 记下来源），
+    status 只做「投稿状态」标记，不改动 spots —— 发布动作在 admin.py 里做。
     """
 
     __tablename__ = "user_spots"
@@ -84,6 +87,11 @@ class UserSpot(Base):
     photo_url: Mapped[str] = mapped_column(String(255), default="")
     lat: Mapped[float] = mapped_column(Float, nullable=True)
     lng: Mapped[float] = mapped_column(Float, nullable=True)
+    # 审核状态：pending（待审）| approved（已发布）| rejected（已驳回）
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    reviewed_at: Mapped[str] = mapped_column(String(32), default="")  # 北京时间 YYYY-MM-DD
+    approved_spot_id: Mapped[str] = mapped_column(String(64), default="")  # 通过后写入 spots 的 id
+    review_note: Mapped[str] = mapped_column(String(255), default="")  # 驳回原因/审核备注
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -103,6 +111,25 @@ class Species(Base):
     source: Mapped[str] = mapped_column(String(255), default="")
     reviewed_at: Mapped[str] = mapped_column(String(32), default="")
     protected: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class SpotHarmonics(Base):
+    """按坐标算出来的点位调和常数（用户投稿、审核通过后新增的点位）。
+
+    seed 里的 42 个点位走 `app/services/spot_harmonics.py` 预计算好的静态表；
+    这张表存运行时新增的点位（spot_z_*）—— 审核通过时按坐标从沿海网格插值算出并存下来，
+    潮汐接口优先用它。存下来而不是每次请求现算：值是确定的、可查可改，也不用每次请求都插值。
+    """
+
+    __tablename__ = "spot_harmonics"
+
+    spot_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # {分潮: [hRe, hIm]}，单位米（JSON 里元组会存成数组，读出时转回 tuple）
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    source: Mapped[str] = mapped_column(String(32), default="")
+    lat: Mapped[float] = mapped_column(Float, nullable=True)
+    lng: Mapped[float] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class SpeciesUnlock(Base):
@@ -277,12 +304,26 @@ class UserMedal(Base):
 
 
 class Feedback(Base):
+    """用户反馈。
+
+    spot_id 非空表示是从某个点位详情页的「反馈」按钮发来的（管理员能对上点位）；
+    空串表示「关于」页的通用反馈。
+    """
+
     __tablename__ = "feedback"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.id"), index=True)
     content: Mapped[str] = mapped_column(Text, default="")
     contact: Mapped[str] = mapped_column(String(128), default="")
+    spot_id: Mapped[str] = mapped_column(String(64), default="", index=True)
+    # 管理员是否已处理（后台「反馈」那栏据此分「未处理 / 已处理」）
+    handled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 管理员回复；用户在小程序「消息」里能看到
+    reply: Mapped[str] = mapped_column(Text, default="")
+    replied_at: Mapped[str] = mapped_column(String(32), default="")
+    # 用户是否已看过这条回复（消息中心的未读小红点）
+    reply_seen: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -448,6 +489,11 @@ class WatchRecord(Base):
     started_at: Mapped[str] = mapped_column(String(32), default="")
     ended_at: Mapped[str] = mapped_column(String(32), default="")
     species: Mapped[list] = mapped_column(JSON, default=list)
+    # 观潮开始那一刻的天气 / 气温（和风逐小时预报）。
+    # 逐小时预报查不了过去的日子，所以必须开始时就存下来，记录页才有得显示
+    # （见 watch.py::start_watch）。旧记录这两列为空，页面上不显示即可。
+    weather_text: Mapped[str] = mapped_column(String(32), default="")
+    temp_c: Mapped[int] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

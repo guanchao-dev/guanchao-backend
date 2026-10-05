@@ -15,6 +15,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.exceptions import AiUnavailableError
+from app.services.weather import line as weather_line
 
 
 def _extract_content(data: dict) -> str:
@@ -228,11 +229,14 @@ async def _advice_text(
             f"- **离场时间：{leave_before}**。写「什么时候该离开」时**只能用它**，"
             f"不要用高潮时间或其他时间自行推算。\n"
         )
+    # 天气取不到就整行不喂给模型 —— 别让它看到「、风  级、」这种残句
+    wx_text = weather_line(weather or {}, with_temp=True)
+    wx_prompt_line = f"- 天气：{wx_text}\n" if wx_text else ""
     prompt = (
         f"今天{spot.get('name', '海边')}（{spot.get('city', '')}）的潮汐与天气：\n"
         f"- 当前潮高约 {tide['currentHeightM']} 米，趋势 {tide['trend']}（rising=涨潮 falling=退潮）\n"
         f"- 潮汐点：{points}\n"
-        f"- 天气：{weather['text']}，{weather['tempC']}℃，{weather['windDir']}风 {weather['windScale']} 级，{weather['waveHint']}\n"
+        f"{wx_prompt_line}"
         f"- 点位适龄提示：{spot.get('age_hint', '')}；安全提示：{'、'.join(spot.get('safety_tags', []))}\n"
         f"- 赶海判断：{beach.get('label', '')}，{beach.get('reason', '')}，{beach.get('goAdvice', '')}\n"
         f"{best_line}{leave_line}\n"
@@ -276,6 +280,8 @@ async def tide_advice(tide: dict, weather: dict, spot: dict, now: datetime) -> d
 
     fallback = build_fallback_advice(tide, weather, now)
     beach = build_beachcombing_hint(tide, now)
+    # 天气短语（不带气温）；取不到就是空串，界面那句整句不显示
+    wx_text_no_temp = weather_line(weather or {})
 
     # 把赶海时机融合进规则兜底正文（降级 / AI 失败时也能给出赶海信息）
     if beach.get("goAdvice"):
@@ -290,7 +296,7 @@ async def tide_advice(tide: dict, weather: dict, spot: dict, now: datetime) -> d
             "suitableForLowerGrade": True,
             "leaveBefore": None,
             "nextChange": {},
-            "weatherLine": f"今天{weather['text']}、{weather['windDir']}风 {weather['windScale']} 级、{weather['waveHint']}。",
+            "weatherLine": f"今天{wx_text_no_temp}。" if wx_text_no_temp else "",
             "safetyLine": "请由大人陪同；不要独自下水；以现场警示和官方预警为准。",
             "disclaimer": "潮汐与天气仅供参考，出海或近水活动请以海洋预报和现场管理为准。",
             "generatedBy": "rule",

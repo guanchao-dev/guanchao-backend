@@ -49,6 +49,7 @@ async def help_feedback(
             user_id=user.id,
             content=body.content,
             contact=body.contact or "",
+            spot_id=(body.spotId or "").strip()[:64],
         )
     )
     await db.commit()

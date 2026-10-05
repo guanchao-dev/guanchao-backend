@@ -12,8 +12,9 @@ from app.core.utils import SHANGHAI_TZ, new_id
 from app.db.base import get_db
 from app.db.models import Spot, WatchRecord
 from app.schemas import WatchEndRequest, WatchSpeciesRequest, WatchStartRequest
+from app.services import weather as weather_svc
 from app.services.species_unlock import unlock_species
-from app.services.tide import get_tide_window, get_weather
+from app.services.tide import get_tide_window
 
 # 观潮记录卡上的日期写法：周六.10.03（与前端 dateLabel 的中文习惯一致）
 _WEEKDAY_CN = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
@@ -166,12 +167,9 @@ def _record_item(r: WatchRecord, spot_name: str = "", seq: int = 0, tide_text: s
     end_time = end.strftime("%H:%M") if end else start_time
     duration = _duration_text(start, end or start)
     species = _clean_items(r.species)
-    # 天气现在是 get_weather 的占位实现（固定「多云 24℃」），接真实天气接口后这里自动变真
-    weather = get_weather(r.spot_id, date) or {}
-    try:
-        temp_text = f"{int(weather.get('tempC'))}℃"
-    except (TypeError, ValueError):
-        temp_text = ""
+    # 天气是观潮开始时存下来的（见 start_watch）。旧记录没有这两列，留空即可，
+    # 不要回退成占位值 —— 宁可不显示，也不显示一个假天气。
+    temp_text = f"{r.temp_c}℃" if r.temp_c is not None else ""
     return {
         "id": r.id,
         # 观潮编号：按开始时间从早到晚排，第几次观潮
@@ -189,7 +187,7 @@ def _record_item(r: WatchRecord, spot_name: str = "", seq: int = 0, tide_text: s
         "durationText": duration,
         "spotName": spot_name,
         "tempText": temp_text,
-        "weatherText": str(weather.get("text") or ""),
+        "weatherText": r.weather_text or "",
         # 潮高：只有详情接口会算（要读潮汐缓存），列表里留空
         "tideText": tide_text,
         "species": species,
@@ -261,6 +259,10 @@ async def start_watch(
                 "species": existing.species or [],
             }
         )
+    # 观潮开始就把当时的天气存下来：逐小时预报查不了过去的日子，
+    # 不存的话这条记录以后永远显示不出天气。取不到就留空，不编造。
+    spot = await db.get(Spot, body.spotId) if body.spotId else None
+    wx = await weather_svc.current(spot.lat if spot else None, spot.lng if spot else None)
     rec = WatchRecord(
         id=new_id("wr"),
         owner_id=owner_id,
@@ -268,6 +270,8 @@ async def start_watch(
         started_at=body.startedAt,
         ended_at="",
         species=[],
+        weather_text=str(wx.get("text") or ""),
+        temp_c=wx.get("tempC"),
     )
     db.add(rec)
     await db.commit()

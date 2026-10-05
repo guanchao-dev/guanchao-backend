@@ -10,12 +10,12 @@ from app.core.response import ok
 from app.core.utils import SHANGHAI_TZ
 from app.db.base import get_db
 from app.db.models import Spot
+from app.services import weather as weather_svc
 from app.services.ai import tide_advice
 from app.services.tide import (
     build_beachcombing_hint,
     build_fallback_advice,
     get_tide_window,
-    get_weather,
     tide_calendar,
 )
 
@@ -66,8 +66,8 @@ async def home_today(
             now = datetime.strptime(date, "%Y-%m-%d").replace(hour=12, tzinfo=SHANGHAI_TZ)
         except ValueError:
             pass
-    tide = await get_tide_window(spot.id, now, db)
-    weather = get_weather(spot.id, date)
+    tide = await get_tide_window(spot.id, now, db, spot.lat, spot.lng)
+    weather = await weather_svc.current(spot.lat, spot.lng)
     spot_info = {
         "name": spot.name,
         "city": spot.city,
@@ -100,4 +100,4 @@ async def calendar(
     spot = await db.get(Spot, spotId)
     if spot is None:
         raise NotFoundError("点位不存在")
-    return ok(tide_calendar(spotId, month))
+    return ok(await tide_calendar(spotId, month, spot.lat, spot.lng, db))

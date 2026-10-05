@@ -1,8 +1,10 @@
+import secrets
 from typing import Optional
 
 from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.exceptions import GuardianConsentError, UnauthorizedError
 from app.core.security import decode_access_token
 from app.db.base import get_db
@@ -57,3 +59,21 @@ async def get_identity(
     if user is not None:
         return user, f"user:{user.id}"
     return None, f"client:{x_client_id or 'guest'}"
+
+
+async def require_admin(
+    x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
+) -> bool:
+    """管理接口鉴权：请求头 X-Admin-Token 必须与 settings.admin_token 一致。
+
+    未配置 ADMIN_TOKEN 时一律拒绝 —— 绝不能因为「配置是空、请求头也是空」就放行。
+    compare_digest 做常数时间比较，避免按字符命中耗时泄露令牌；两边都 encode 成 bytes，
+    因为 compare_digest 传非 ASCII 的 str 会直接抛 TypeError（令牌含中文是可能的）。
+    """
+    expected = settings.admin_token or ""
+    if not expected:
+        raise UnauthorizedError("管理接口未启用（未配置 ADMIN_TOKEN）")
+    provided = x_admin_token or ""
+    if not provided or not secrets.compare_digest(provided.encode("utf-8"), expected.encode("utf-8")):
+        raise UnauthorizedError("管理令牌无效")
+    return True

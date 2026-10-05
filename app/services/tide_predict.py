@@ -1,12 +1,10 @@
-"""青岛—威海四赶海地点天文潮预测（Tide Model Driver 3 的 Python 移植，17 个主要分潮）。
+"""赶海点位天文潮预测（Tide Model Driver 3 的 Python 移植，17 个主要分潮）。
 
-数据来源：EOT20 全球海洋潮汐模型，四个赶海地点的最近有效海洋格点：
-  - qingdao_first_beach  青岛·第一海水浴场
-  - qingdao_shilaoren    青岛·石老人
-  - qingdao_liuqinghe    青岛·流清河
-  - weihai_chengshantou  威海·成山头
+数据来源：FES2022b 中国近海版（AVISO，1/30° 网格）。每个点位按自己的经纬度取最近
+有效格点的调和常数，见 `app/services/spot_harmonics.py`（由
+`tools/build_spot_harmonics.py` 生成，点位增删后重跑该脚本即可）。
 
-结果含义：`tidal_anomaly_m` —— 相对 EOT20 模型平均面的潮位偏差（米），
+结果含义：相对 FES2022b 模型平均面的潮位偏差（米），
 **不是**中国海图基准上的绝对潮高，尚未做垂直基准校准。
 
 算法逐行对照 vendor/Tide-Model-Driver 的 MATLAB 源码：
@@ -16,14 +14,20 @@
   - tmd_harp.m     合成：z = Σ pf*(hRe*cos + hIm*sin)，其中
                       tmp = omega*(t-t0秒) + ph + pu
 
-注意：本模块只预测 17 个主要分潮，不含小分潮推算（TMD 的 InferMinor）。
-与 MATLAB 生成的 `major17_anomaly_m` 列对应；`tidal_anomaly_m` 额外含小分潮，
-两者差异通常在 2~3 cm 量级，对赶海相对潮位显示可忽略。
+分潮数量：只预测 17 个主要分潮，不含小分潮推算（TMD 的 InferMinor）。FES2022b
+提供 34 个分潮，但本预报器的天文常数与节点订正只覆盖这 17 个；补齐其余 17 个
+（多为复合分潮）需另行移植，两者差异通常在 2~3 cm 量级，对赶海相对潮位显示可忽略。
+
+换算约定：FES 给的是（振幅 cm，相位 度），本模块用复系数 (hRe, hIm)：
+    hRe = A*cos(g)      hIm = A*sin(g)      （A 取米、g 取弧度）
+该约定已用旧 EOT20 值在 4 个地点交叉验证（相位差 1~11°、振幅差 2~7%）。
 """
 from __future__ import annotations
 
 import math
 from datetime import datetime, timezone
+
+from app.services.spot_harmonics import SPOT_COORDS, SPOT_HARMONICS
 
 # t0 = 1992-01-01 00:00 UTC，TMD 复系数的参考历元
 _T0 = datetime(1992, 1, 1, tzinfo=timezone.utc)
@@ -51,86 +55,71 @@ _ASTRO: list[tuple[str, float, float, str]] = [
     ("M4",  2.810377e-04,         3.463115091,    "m4"),
 ]
 
-# 各赶海地点调和常数复系数：site_id -> {constituent: (hRe, hIm)}
-# 来自交付包 data/multisite_eot20_harmonics.csv（EOT20 各地点最近有效海洋格点）
-SITE_HARMONICS: dict[str, dict[str, tuple[float, float]]] = {
-    'qingdao_first_beach': {
-        'SA': (-0.0262008121100446, -0.051091583614587),
-        'SSA': (0.0, 0.00262008121100446),
-        'MM': (-0.00131004060550223, -0.00262008121100446),
-        'MF': (-0.00655020302751116, -0.00393012181650669),
-        'Q1': (-0.0353710963485602, 0.0157204872660268),
-        'O1': (-0.200436212641841, -0.00917028423851562),
-        'P1': (-0.0497815430090848, -0.0497815430090848),
-        'S1': (-0.0196506090825335, -0.0131004060550223),
-        'K1': (-0.153274750843761, -0.20567637506385),
-        'J1': (0.00262008121100446, -0.00917028423851562),
-        '2N2': (-0.0235807308990402, -0.0183405684770312),
-        'N2': (-0.132314101155725, -0.191265928403326),
-        'M2': (-0.244977593228917, -1.14628552981445),
-        'T2': (0.00917028423851562, -0.017030527871529),
-        'S2': (0.127073938733716, -0.351090882274598),
-        'K2': (0.0327510151375558, -0.104803248440178),
-        'M4': (0.0812225175411383, 0.0589518272476004),
-    },
-    'qingdao_shilaoren': {
-        'SA': (-0.0248907715045424, -0.051091583614587),
-        'SSA': (0.0, 0.00262008121100446),
-        'MM': (-0.00131004060550223, -0.00131004060550223),
-        'MF': (-0.00655020302751116, -0.00393012181650669),
-        'Q1': (-0.0353710963485602, 0.0157204872660268),
-        'O1': (-0.196506090825335, -0.00655020302751116),
-        'P1': (-0.0484715024035826, -0.0484715024035826),
-        'S1': (-0.0196506090825335, -0.0117903654495201),
-        'K1': (-0.153274750843761, -0.200436212641841),
-        'J1': (0.00262008121100446, -0.00917028423851562),
-        '2N2': (-0.0235807308990402, -0.0157204872660268),
-        'N2': (-0.136244222972232, -0.178165522348303),
-        'M2': (-0.294759136238002, -1.08733370256685),
-        'T2': (0.00917028423851562, -0.017030527871529),
-        'S2': (0.103493207834676, -0.347160760458091),
-        'K2': (0.0262008121100446, -0.102183167229174),
-        'M4': (0.0812225175411383, 0.0366811369540625),
-    },
-    'qingdao_liuqinghe': {
-        'SA': (-0.0262008121100446, -0.0497815430090848),
-        'SSA': (0.0, 0.00262008121100446),
-        'MM': (-0.00131004060550223, -0.00131004060550223),
-        'MF': (-0.00786024363301339, -0.00393012181650669),
-        'Q1': (-0.034061055743058, 0.0183405684770312),
-        'O1': (-0.191265928403326, 0.00655020302751116),
-        'P1': (-0.0497815430090848, -0.0432313399815736),
-        'S1': (-0.0196506090825335, -0.00917028423851562),
-        'K1': (-0.163755075687779, -0.18209564416481),
-        'J1': (0.00131004060550223, -0.00786024363301339),
-        '2N2': (-0.0248907715045424, -0.0104803248440178),
-        'N2': (-0.163755075687779, -0.145414507210748),
-        'M2': (-0.491265227063337, -0.979910372915669),
-        'T2': (0.00393012181650669, -0.0183405684770312),
-        'S2': (0.0327510151375558, -0.357641085302109),
-        'K2': (0.00524016242200892, -0.102183167229174),
-        'M4': (0.0772923957246316, 0.0248907715045424),
-    },
-    'weihai_chengshantou': {
-        'SA': (-0.0327510151375558, -0.0445413805870759),
-        'SSA': (-0.00131004060550223, 0.00262008121100446),
-        'MM': (-0.00131004060550223, -0.00262008121100446),
-        'MF': (-0.00917028423851562, -0.00393012181650669),
-        'Q1': (-0.017030527871529, 0.0196506090825335),
-        'O1': (-0.141484385394241, 0.0746723145136272),
-        'P1': (-0.0641919896696093, -0.0131004060550223),
-        'S1': (-0.0104803248440178, 0.00393012181650669),
-        'K1': (-0.225326984146384, -0.0628819490641071),
-        'J1': (-0.00524016242200892, -0.00786024363301339),
-        '2N2': (0.00524016242200892, 0.00917028423851562),
-        'N2': (0.00655020302751116, 0.0484715024035826),
-        'M2': (-0.14672454781625, 0.30523946108202),
-        'T2': (-0.00131004060550223, 0.00131004060550223),
-        'S2': (-0.112663492073192, 0.0104803248440178),
-        'K2': (-0.0314409745320536, 0.00655020302751116),
-        'M4': (-0.00786024363301339, 0.0196506090825335),
-    },
-}
+# 分潮名（顺序即 coastal_grid.bin 里逐格存放的顺序，两边必须一致）
+CONSTITUENTS: list[str] = [row[0] for row in _ASTRO]
+
+# 表里查不到、且没有坐标时最后的兜底点位（青岛·第一海水浴场）
+_LAST_RESORT_SPOT = "spot_qd_yigong"
+
+# 运行时登记的调和常数：审核通过的新点位由 tide.py 从库里读出后登记，
+# 之后 predict 直接可用（进程内缓存，进程重启后按需重新登记）。
+_RUNTIME_HARMONICS: dict[str, dict[str, tuple[float, float]]] = {}
+
+
+def register_harmonics(spot_id: str, harmonics: dict[str, tuple[float, float]]) -> None:
+    """登记某点位的调和常数（从库里读出的）。"""
+    _RUNTIME_HARMONICS[spot_id] = harmonics
+
+
+def is_known(spot_id: str) -> bool:
+    """静态表或运行时登记里有没有这个点位。"""
+    return spot_id in _RUNTIME_HARMONICS or spot_id in SPOT_HARMONICS
+
+
+def _harmonics_of(spot_id: str) -> dict[str, tuple[float, float]] | None:
+    """取点位常数：运行时登记的优先（库里存的更新），其次预计算的静态表。"""
+    return _RUNTIME_HARMONICS.get(spot_id) or SPOT_HARMONICS.get(spot_id)
+
+
+def harmonics_from_coords(lat: float, lng: float) -> dict[str, tuple[float, float]] | None:
+    """按坐标从沿海网格插值出调和常数（审核新点位时用）。超出网格范围返回 None。"""
+    from app.services import coastal_grid
+
+    return coastal_grid.harmonics_at(lat, lng, CONSTITUENTS)
+
+
+def _nearest(lat: float, lng: float) -> str | None:
+    """离 (lat, lng) 最近的有调和常数的点位。"""
+    best: str | None = None
+    best_d = float("inf")
+    for sid, (sla, slo) in SPOT_COORDS.items():
+        # 经度差按纬度收缩，粗略折算成等效距离的平方
+        d = (sla - lat) ** 2 + ((slo - lng) * math.cos(math.radians(lat))) ** 2
+        if d < best_d:
+            best, best_d = sid, d
+    return best
+
+
+def resolve_spot(spot_id: str, lat: float | None = None, lng: float | None = None) -> str:
+    """把任意 spot_id 解析成「调和常数表里确实有数据」的点位 id。
+
+    1) 表里有 -> 直接用；
+    2) 否则用坐标（优先调用方传的，其次表里记的）找最近的点位；
+    3) 都没有 -> 兜底点位。
+
+    用户投稿过审后新增的点位不在表里，走第 2 步就近近似；想精确就把它补进
+    seed.py 的 SPOTS 再重跑一次 tools/build_spot_harmonics.py。
+    """
+    if spot_id in _RUNTIME_HARMONICS or spot_id in SPOT_HARMONICS:
+        return spot_id
+    use_lat, use_lng = lat, lng
+    if use_lat is None or use_lng is None:
+        use_lat, use_lng = SPOT_COORDS.get(spot_id, (None, None))
+    if use_lat is not None and use_lng is not None:
+        near = _nearest(float(use_lat), float(use_lng))
+        if near:
+            return near
+    return _LAST_RESORT_SPOT
 
 
 def _nodal_corrections(n_deg: float, p_deg: float) -> dict[str, tuple[float, float]]:
@@ -207,8 +196,11 @@ def _astrol(days_since_t0: float) -> tuple[float, float]:
     return p, n
 
 
-def predict(site_id: str, t: datetime) -> float:
-    """预测某地点在单个 UTC 时刻的潮位偏差（米）。"""
+def predict(spot_id: str, t: datetime) -> float:
+    """预测某点位在单个 UTC 时刻的潮位偏差（米）。
+
+    spot_id 一般已由 `resolve_spot` 解析过；传未解析的 id 也行（内部再解析一次）。
+    """
     if t.tzinfo is None:
         raise ValueError("predict 需要 tz-aware 的 UTC 时间")
     t_utc = t.astimezone(timezone.utc)
@@ -216,7 +208,9 @@ def predict(site_id: str, t: datetime) -> float:
     t_sec = (t_utc - _T0).total_seconds()
     p_deg, n_deg = _astrol(days)
     nodal = _nodal_corrections(n_deg, p_deg)
-    harmonics = SITE_HARMONICS.get(site_id) or SITE_HARMONICS["qingdao_first_beach"]
+    harmonics = _harmonics_of(spot_id)
+    if harmonics is None:
+        harmonics = _harmonics_of(resolve_spot(spot_id)) or SPOT_HARMONICS[_LAST_RESORT_SPOT]
 
     z = 0.0
     for name, omega, ph, key in _ASTRO:
@@ -227,6 +221,6 @@ def predict(site_id: str, t: datetime) -> float:
     return z
 
 
-def predict_series(site_id: str, times: list[datetime]) -> list[float]:
-    """批量预测某地点，返回与输入等长的潮位列表（米）。"""
-    return [predict(site_id, t) for t in times]
+def predict_series(spot_id: str, times: list[datetime]) -> list[float]:
+    """批量预测某点位，返回与输入等长的潮位列表（米）。"""
+    return [predict(spot_id, t) for t in times]

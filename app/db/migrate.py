@@ -19,6 +19,9 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
     ],
     "watch_records": [
         ("spot_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
+        # 观潮开始时的天气/气温（逐小时预报查不了过去，必须当场存）
+        ("weather_text", "VARCHAR(32) NOT NULL DEFAULT ''"),
+        ("temp_c", "INT NULL"),
     ],
     "uploads": [
         ("owner_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
@@ -39,6 +42,24 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
     ],
     "species_unlocks": [
         ("seen", "BOOLEAN NOT NULL DEFAULT 0"),
+    ],
+    "feedback": [
+        # 点位详情页的反馈按钮带上的点位 id；空串 = 「关于」页的通用反馈
+        ("spot_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
+        ("handled", "BOOLEAN NOT NULL DEFAULT 0"),
+        # 管理员回复 + 用户是否看过。reply 用 TEXT NULL：MySQL 的 TEXT 不能带 DEFAULT
+        ("reply", "TEXT NULL"),
+        ("replied_at", "VARCHAR(32) NOT NULL DEFAULT ''"),
+        ("reply_seen", "BOOLEAN NOT NULL DEFAULT 0"),
+    ],
+    # 放在最后：run_migrations 单事务提交，前面某条 ALTER 失败会回滚当次全部加列，
+    # 这条越靠后越不容易被别的表连累。
+    "user_spots": [
+        # DEFAULT 'pending' 不能省：create_all 不改动已存在的表，历史行全靠这条 DDL 拿到初始状态。
+        ("status", "VARCHAR(16) NOT NULL DEFAULT 'pending'"),
+        ("reviewed_at", "VARCHAR(32) NOT NULL DEFAULT ''"),
+        ("approved_spot_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
+        ("review_note", "VARCHAR(255) NOT NULL DEFAULT ''"),
     ],
 }
 

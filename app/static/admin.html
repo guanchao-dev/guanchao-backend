@@ -1,0 +1,1001 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>宝藏点位审核 · 观潮</title>
+<style>
+  :root {
+    --bg: #F4F3EF;
+    --surface: #FFFFFF;
+    --ink: #16181C;
+    --ink-2: #3D4249;
+    --muted: #767C85;
+    --faint: #A8ADB5;
+    --line: #E4E2DB;
+    --line-2: #EEEDE8;
+    --teal: #0E7C86;
+    --teal-dark: #0A616A;
+    --teal-soft: #E3F2F1;
+    --amber: #A9760A;
+    --amber-soft: #FBF1D9;
+    --red: #B23A26;
+    --red-soft: #FAEBE7;
+    --radius: 10px;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+            "Hiragino Sans GB", "Microsoft YaHei", "Source Han Sans SC", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--ink);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  a { color: var(--teal); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .hidden { display: none !important; }
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* ---------- 顶栏 ---------- */
+  .topbar {
+    height: 58px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 22px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 20;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-mark {
+    width: 26px; height: 26px; border-radius: 7px;
+    background: var(--teal);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+  .brand-name { font-weight: 650; letter-spacing: .02em; }
+  .brand-sub { color: var(--muted); font-size: 13px; }
+  .topbar .spacer { flex: 1; }
+  .btn {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 6px 13px;
+    font-size: 13px;
+    color: var(--ink-2);
+    transition: background .12s, border-color .12s;
+  }
+  .btn:hover { background: #FAFAF8; border-color: #D8D5CC; }
+  .btn:active { background: #F2F1EC; }
+  .btn.primary { background: var(--teal); border-color: var(--teal); color: #fff; }
+  .btn.primary:hover { background: var(--teal-dark); border-color: var(--teal-dark); }
+  .btn.danger { color: var(--red); border-color: #E8D2CC; background: var(--surface); }
+  .btn.danger:hover { background: var(--red-soft); border-color: #DFBCB3; }
+  .btn:disabled { opacity: .5; cursor: default; }
+
+  /* ---------- 工具条 ---------- */
+  .toolbar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 22px 0;
+  }
+  .segmented {
+    display: inline-flex; padding: 3px; gap: 2px;
+    background: #EAE9E3; border-radius: 9px;
+  }
+  .segmented button {
+    border: 0; background: transparent; border-radius: 7px;
+    padding: 6px 15px; font-size: 13px; color: var(--muted);
+    display: inline-flex; align-items: center; gap: 7px;
+  }
+  .segmented button.active {
+    background: var(--surface); color: var(--ink); font-weight: 600;
+    box-shadow: 0 1px 2px rgba(20,22,26,.07);
+  }
+  .segmented .n {
+    font-size: 11px; font-variant-numeric: tabular-nums;
+    color: var(--faint); min-width: 14px; text-align: center;
+  }
+  .segmented button.active .n { color: var(--teal); font-weight: 600; }
+  .toolbar .hint { color: var(--muted); font-size: 12.5px; margin-left: auto; }
+  .dot-live { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #26A96C; margin-right: 6px; vertical-align: 1px; }
+
+  /* ---------- 主从布局 ---------- */
+  .split {
+    display: grid;
+    grid-template-columns: 384px 1fr;
+    gap: 16px;
+    padding: 16px 22px 28px;
+    align-items: start;
+    height: calc(100vh - 58px - 62px);
+    min-height: 420px;
+  }
+  .pane {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .list-pane { display: flex; flex-direction: column; height: 100%; }
+  .list-scroll { flex: 1; overflow-y: auto; }
+  .detail-pane { height: 100%; overflow-y: auto; }
+
+  /* ---------- 列表行 ---------- */
+  .row {
+    display: grid;
+    grid-template-columns: 8px 1fr auto;
+    gap: 11px; align-items: center;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--line-2);
+    cursor: pointer;
+    transition: background .1s;
+  }
+  .row:last-child { border-bottom: 0; }
+  .row:hover { background: #FAFAF7; }
+  .row.selected { background: var(--teal-soft); }
+  .row.selected .row-name { color: var(--teal-dark); }
+  .row-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+  .row.pending  .row-dot { background: #E0A308; }
+  .row.approved .row-dot { background: #14A08A; }
+  .row.rejected .row-dot { background: #D5563A; }
+  .row-main { min-width: 0; }
+  .row-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-addr { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .row-side { color: var(--faint); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .list-foot { padding: 12px; border-top: 1px solid var(--line-2); text-align: center; }
+  .list-empty {
+    height: 100%; min-height: 240px;
+    display: grid; place-items: center;
+    padding: 24px; text-align: center; color: var(--muted);
+  }
+  .list-empty .big { font-size: 15px; color: var(--ink-2); }
+
+  /* ---------- 详情 ---------- */
+  .detail-empty {
+    height: 100%; display: grid; place-items: center;
+    color: var(--faint); font-size: 13.5px;
+  }
+  .detail { padding: 26px 28px; }
+  .detail-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 4px; }
+  .detail-title { font-size: 20px; font-weight: 660; letter-spacing: .01em; margin: 0; }
+  .pill {
+    font-size: 12px; padding: 2px 10px; border-radius: 999px; white-space: nowrap;
+    font-weight: 600; margin-top: 3px;
+  }
+  .pill.pending  { background: var(--amber-soft); color: var(--amber); }
+  .pill.approved { background: var(--teal-soft); color: var(--teal-dark); }
+  .pill.rejected { background: var(--red-soft); color: var(--red); }
+  .detail-sub { color: var(--muted); font-size: 13px; margin-bottom: 22px; }
+
+  .section { margin-bottom: 22px; }
+  .section-label {
+    font-size: 11.5px; letter-spacing: .08em; color: var(--faint);
+    text-transform: uppercase; margin-bottom: 7px;
+  }
+  .kv { display: grid; grid-template-columns: 84px 1fr; gap: 6px 14px; font-size: 13.5px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; color: var(--ink-2); word-break: break-word; }
+  .note-box {
+    background: #FAFAF7; border: 1px solid var(--line-2); border-radius: 8px;
+    padding: 12px 14px; font-size: 13.5px; color: var(--ink-2);
+    white-space: pre-wrap; word-break: break-word; line-height: 1.7;
+  }
+  .note-box.accent { background: var(--teal-soft); border-color: #CFE6E4; }
+  .note-box.warn { background: var(--red-soft); border-color: #EFD6CF; color: var(--red); }
+  .reply-hint { margin-bottom: 8px; color: var(--faint); font-size: 12.5px; }
+  /* 可点击的文字（反馈里的点位名 → 跳到那条投稿） */
+  .link { color: var(--teal); text-decoration: underline; cursor: pointer; }
+  .link:hover { color: var(--teal-dark); }
+  .reply-at { display: block; margin-top: 6px; color: var(--teal-dark); font-size: 12px; }
+  .reply-input {
+    width: 100%; box-sizing: border-box; min-height: 76px;
+    margin-top: 10px; padding: 10px 12px;
+    border: 1px solid var(--line); border-radius: 8px; background: #FCFCFB;
+    font: inherit; font-size: 13.5px; line-height: 1.6; resize: vertical;
+  }
+  .reply-input:focus {
+    outline: none; border-color: var(--teal); background: #fff;
+    box-shadow: 0 0 0 3px rgba(14, 124, 134, 0.12);
+  }
+  .detail-actions {
+    display: flex; gap: 10px; padding-top: 6px;
+    border-top: 1px solid var(--line-2); margin-top: 26px; padding-top: 20px;
+  }
+  .detail-actions .btn { padding: 9px 20px; font-size: 13.5px; }
+
+  /* ---------- 遮罩 / 弹窗 ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 40;
+    background: rgba(22,24,28,.42);
+    display: grid; place-items: center; padding: 20px;
+    backdrop-filter: blur(1px);
+  }
+  .dialog {
+    background: var(--surface); border-radius: 14px;
+    width: 520px; max-width: 100%; max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 18px 50px rgba(20,22,26,.22);
+  }
+  .dialog-head { padding: 20px 24px 0; }
+  .dialog-title { font-size: 16.5px; font-weight: 650; margin: 0 0 4px; }
+  .dialog-desc { color: var(--muted); font-size: 12.5px; }
+  .dialog-body { padding: 18px 24px 4px; }
+  .dialog-foot {
+    display: flex; justify-content: flex-end; gap: 10px;
+    padding: 16px 24px 20px; margin-top: 14px; border-top: 1px solid var(--line-2);
+  }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-2); margin-bottom: 5px; }
+  .field .req { color: var(--red); margin-left: 2px; }
+  .field input, .field textarea {
+    width: 100%; padding: 9px 12px; font: inherit; font-size: 13.5px;
+    border: 1px solid var(--line); border-radius: 8px; background: #FCFCFB;
+    transition: border-color .12s, box-shadow .12s;
+  }
+  .field input:focus, .field textarea:focus {
+    outline: none; border-color: var(--teal); background: #fff;
+    box-shadow: 0 0 0 3px rgba(14,124,134,.12);
+  }
+  .field textarea { resize: vertical; min-height: 66px; line-height: 1.6; }
+  .field .tip { font-size: 12px; color: var(--faint); margin-top: 5px; display: flex; gap: 6px; align-items: center; }
+  .field .tip .spinner-xs {
+    width: 11px; height: 11px; border: 1.5px solid var(--line); border-top-color: var(--teal);
+    border-radius: 50%; animation: spin .7s linear infinite; display: inline-block;
+  }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- 登录 ---------- */
+  .gate { position: fixed; inset: 0; z-index: 60; background: var(--bg); display: grid; place-items: center; padding: 20px; }
+  .gate-card { width: 360px; max-width: 100%; }
+  .gate-brand { display: flex; align-items: center; gap: 10px; justify-content: center; margin-bottom: 22px; }
+  .gate h1 { font-size: 17px; margin: 0; font-weight: 650; }
+  .gate .box { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 26px; }
+  .gate .box p { margin: 0 0 16px; color: var(--muted); font-size: 12.5px; line-height: 1.7; }
+  .gate input {
+    width: 100%; padding: 10px 12px; font: inherit; font-size: 14px;
+    border: 1px solid var(--line); border-radius: 8px; background: #FCFCFB; margin-bottom: 12px;
+  }
+  .gate input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px rgba(14,124,134,.12); }
+  .gate .btn { width: 100%; padding: 10px; font-size: 14px; justify-content: center; }
+  .gate .err { color: var(--red); font-size: 12.5px; min-height: 17px; margin-bottom: 8px; }
+
+  /* ---------- Toast ---------- */
+  #toast {
+    position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%) translateY(6px);
+    background: var(--ink); color: #fff; padding: 9px 18px; border-radius: 9px;
+    font-size: 13px; opacity: 0; transition: opacity .18s, transform .18s;
+    pointer-events: none; z-index: 70; box-shadow: 0 8px 24px rgba(20,22,26,.25);
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 900px) {
+    .split { grid-template-columns: 1fr; height: auto; }
+    .list-pane { height: auto; max-height: 46vh; }
+    .detail-pane { height: auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 登录 -->
+<div class="gate hidden" id="gate">
+  <div class="gate-card">
+    <div class="gate-brand">
+      <span class="brand-mark">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round">
+          <path d="M3 9c3-2.4 6-2.4 9 0s6 2.4 9 0"/><path d="M3 15c3-2.4 6-2.4 9 0s6 2.4 9 0"/>
+        </svg>
+      </span>
+      <h1>宝藏点位审核</h1>
+    </div>
+    <div class="box">
+      <div class="err" id="gateErr"></div>
+      <input type="password" id="gateInput" placeholder="管理令牌" autocomplete="off" spellcheck="false">
+      <button class="btn primary" id="gateBtn">进入后台</button>
+    </div>
+  </div>
+</div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round">
+        <path d="M3 9c3-2.4 6-2.4 9 0s6 2.4 9 0"/><path d="M3 15c3-2.4 6-2.4 9 0s6 2.4 9 0"/>
+      </svg>
+    </span>
+    <span class="brand-name">观潮</span>
+    <span class="brand-sub">内容审核</span>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn" id="refreshBtn">刷新</button>
+  <button class="btn" id="logoutBtn">切换令牌</button>
+</header>
+
+<div class="toolbar">
+  <div class="segmented" id="tabs"></div>
+  <div class="hint" id="hint"></div>
+</div>
+
+<main class="split">
+  <section class="pane list-pane">
+    <div class="list-scroll" id="listScroll">
+      <div class="list-empty">
+        <div class="big">加载中</div>
+      </div>
+    </div>
+    <div class="list-foot hidden" id="listFoot">
+      <button class="btn" id="moreBtn">加载更多</button>
+    </div>
+  </section>
+  <section class="pane detail-pane" id="detailPane">
+    <div class="detail-empty">从左侧选择一条投稿</div>
+  </section>
+</main>
+
+<div class="overlay hidden" id="modal">
+  <div class="dialog">
+    <div class="dialog-head">
+      <h2 class="dialog-title" id="mTitle">通过并发布</h2>
+      <div class="dialog-desc" id="mDesc"></div>
+    </div>
+    <div class="dialog-body" id="mBody"></div>
+    <div class="dialog-foot">
+      <button class="btn" id="mCancel">取消</button>
+      <button class="btn primary" id="mOk">确认发布</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var API = '/api/v1';
+  // 令牌只存在内存里，不落 localStorage：每次打开/刷新页面都必须重新输入。
+  var _token = '';
+  var LABEL = { pending: '待审核', approved: '已通过', rejected: '已驳回' };
+  // src: sub = 投稿（/admin/submissions），fb = 用户反馈（/admin/feedback）
+  var TABS = [
+    { key: 'pending', label: '待审核', src: 'sub' },
+    { key: 'approved', label: '已通过', src: 'sub' },
+    { key: 'rejected', label: '已驳回', src: 'sub' },
+    { key: 'feedback', label: '反馈', src: 'fb' }
+  ];
+  var PAGE_SIZE = 50;
+
+  function tabOf(key) {
+    for (var i = 0; i < TABS.length; i++) if (TABS[i].key === key) return TABS[i];
+    return TABS[0];
+  }
+
+  var state = {
+    tab: 'pending', page: 1, total: 0, list: [], counts: {}, fbCounts: {},
+    selectedId: null, mode: null, busy: false
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function token() { return _token; }
+
+  function toast(msg) {
+    var el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(el._t);
+    el._t = setTimeout(function () { el.classList.remove('show'); }, 2400);
+  }
+
+  function timeAgo(iso) {
+    if (!iso) return '';
+    var t = new Date(iso).getTime();
+    if (isNaN(t)) return '';
+    var d = Math.max(0, Date.now() - t);
+    var m = Math.floor(d / 60000);
+    if (m < 1) return '刚刚';
+    if (m < 60) return m + ' 分钟前';
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + ' 小时前';
+    var day = Math.floor(h / 24);
+    if (day < 7) return day + ' 天前';
+    return String(iso).slice(0, 10);
+  }
+
+  async function api(path, opts) {
+    opts = opts || {};
+    var res = await fetch(API + path, {
+      method: opts.method || 'GET',
+      headers: Object.assign({
+        'Content-Type': 'application/json',
+        'X-Admin-Token': token()
+      }, opts.headers || {}),
+      body: opts.body
+    });
+    var body = null;
+    try { body = await res.json(); } catch (e) { /* 非 JSON */ }
+    if (!body || body.code !== 0) {
+      var err = new Error((body && body.message) || ('请求失败 (' + res.status + ')'));
+      err.status = res.status;
+      throw err;
+    }
+    return body.data;
+  }
+
+  /* ================= 登录 ================= */
+  function showGate(msg) {
+    $('gateErr').textContent = msg || '';
+    $('gateInput').value = '';
+    $('gate').classList.remove('hidden');
+    $('gateInput').focus();
+  }
+  function hideGate() { $('gate').classList.add('hidden'); }
+
+  async function enter() {
+    var t = $('gateInput').value.trim();
+    if (!t) { $('gateErr').textContent = '请输入令牌'; return; }
+    _token = t;
+    try {
+      await api('/admin/stats');
+      hideGate();
+      await refresh();
+    } catch (e) {
+      _token = '';
+      showGate(e.status === 401 ? e.message : ('连接失败：' + e.message));
+    }
+  }
+
+  function authLost() {
+    _token = '';
+    showGate('令牌已失效，请重新输入');
+  }
+
+  /* ================= 数据 ================= */
+  async function refresh() {
+    await Promise.all([loadStats(), loadList(1)]);
+  }
+
+  async function loadStats() {
+    try {
+      var both = await Promise.all([api('/admin/stats'), api('/admin/feedback/stats')]);
+      state.counts = both[0] || {};
+      state.fbCounts = both[1] || {};
+    } catch (e) { if (e.status === 401) return authLost(); }
+    renderTabs();
+  }
+
+  async function loadList(page) {
+    state.page = page;
+    try {
+      var data;
+      if (tabOf(state.tab).src === 'fb') {
+        data = await api('/admin/feedback?status=all&page=' + page + '&pageSize=' + PAGE_SIZE);
+      } else {
+        data = await api('/admin/submissions?status=' + state.tab +
+          '&page=' + page + '&pageSize=' + PAGE_SIZE);
+      }
+      var items = data.list || [];
+      state.total = data.total || 0;
+      state.list = (page === 1) ? items : state.list.concat(items);
+    } catch (e) {
+      if (e.status === 401) return authLost();
+      toast(e.message);
+      state.list = []; state.total = 0;
+    }
+    // 选中项若已不在列表里，自动选第一条
+    if (!state.list.some(function (x) { return x.id === state.selectedId; })) {
+      state.selectedId = state.list.length ? state.list[0].id : null;
+    }
+    renderList();
+    renderDetail();
+  }
+
+  function findItem(id) {
+    for (var i = 0; i < state.list.length; i++) if (state.list[i].id === id) return state.list[i];
+    return null;
+  }
+
+  /* ================= 渲染 ================= */
+  function renderTabs() {
+    $('tabs').innerHTML = TABS.map(function (t) {
+      // 反馈栏的角标显示「未处理」条数，提示有多少待看的
+      var n = t.src === 'fb' ? (state.fbCounts.pending || 0) : (state.counts[t.key] || 0);
+      return '<button data-tab="' + t.key + '" class="' + (state.tab === t.key ? 'active' : '') + '">' +
+        t.label + '<span class="n">' + n + '</span></button>';
+    }).join('');
+    $('hint').innerHTML = '<span class="dot-live"></span>服务端已连接';
+  }
+
+  function renderList() {
+    var box = $('listScroll');
+
+    if (tabOf(state.tab).src === 'fb') {
+      if (!state.list.length) {
+        box.innerHTML = '<div class="list-empty"><div class="big">还没有用户反馈</div></div>';
+        $('listFoot').classList.add('hidden');
+        return;
+      }
+      box.innerHTML = state.list.map(function (f) {
+        return '<div class="row' + (f.handled ? '' : ' pending') +
+          (f.id === state.selectedId ? ' selected' : '') + '" data-id="' + esc(f.id) + '">' +
+          '<span class="row-dot"></span>' +
+          '<div class="row-main">' +
+            '<div class="row-name">' + esc((f.content || '（空反馈）').slice(0, 42)) + '</div>' +
+            '<div class="row-addr">' + esc(f.spotName || '通用反馈') +
+              (f.spotCity ? ' · ' + esc(f.spotCity) : '') + '</div>' +
+          '</div>' +
+          '<div class="row-side">' + esc(timeAgo(f.createdAt)) + '</div>' +
+        '</div>';
+      }).join('');
+      $('listFoot').classList.toggle('hidden', state.list.length >= state.total);
+      return;
+    }
+
+    if (!state.list.length) {
+      box.innerHTML = '<div class="list-empty"><div class="big">没有' + LABEL[state.tab] + '的投稿</div></div>';
+      $('listFoot').classList.add('hidden');
+      return;
+    }
+    box.innerHTML = state.list.map(function (s) {
+      return '<div class="row ' + esc(s.status) + (s.id === state.selectedId ? ' selected' : '') +
+        '" data-id="' + esc(s.id) + '">' +
+        '<span class="row-dot"></span>' +
+        '<div class="row-main">' +
+          '<div class="row-name">' + esc(s.name) + '</div>' +
+          '<div class="row-addr">' + esc(s.address || '（无地址）') + '</div>' +
+        '</div>' +
+        '<div class="row-side">' + esc(timeAgo(s.createdAt)) + '</div>' +
+      '</div>';
+    }).join('');
+    $('listFoot').classList.toggle('hidden', state.list.length >= state.total);
+  }
+
+  function renderDetail() {
+    var pane = $('detailPane');
+    var s = findItem(state.selectedId);
+    if (!s) {
+      pane.innerHTML = '<div class="detail-empty">从左侧选择一条</div>';
+      return;
+    }
+
+    if (tabOf(state.tab).src === 'fb') {
+      pane.innerHTML =
+        '<div class="detail">' +
+          '<div class="detail-head">' +
+            '<h2 class="detail-title">用户反馈</h2>' +
+            '<span class="pill ' + (s.handled ? 'approved' : 'pending') + '">' +
+              (s.handled ? '已处理' : '未处理') + '</span>' +
+          '</div>' +
+          '<div class="detail-sub">' + esc(timeAgo(s.createdAt)) + ' 提交</div>' +
+          '<div class="section"><div class="section-label">反馈内容</div>' +
+            '<div class="note-box">' + esc(s.content || '（空）') + '</div></div>' +
+          (s.contact
+            ? '<div class="section"><div class="section-label">联系方式</div>' +
+              '<div class="note-box">' + esc(s.contact) + '</div></div>'
+            : '') +
+          '<div class="section"><div class="section-label">针对点位</div>' +
+            '<dl class="kv">' +
+              '<dt>点位</dt><dd>' +
+                ((s.spotName || s.spotId)
+                  ? '<span class="link" data-act="goto-spot">' +
+                    esc(s.spotName || s.spotId) + '</span>'
+                  : '—（通用反馈）') +
+              '</dd>' +
+              '<dt>点位 ID</dt><dd class="mono">' + esc(s.spotId || '—') + '</dd>' +
+              (s.spotLat != null
+                ? '<dt>坐标</dt><dd class="mono">' + esc(s.spotLat + ', ' + s.spotLng) + '</dd>'
+                : '') +
+            '</dl></div>' +
+          '<div class="section"><div class="section-label">回复用户</div>' +
+            (s.reply
+              ? '<div class="note-box accent">' + esc(s.reply) +
+                (s.repliedAt
+                  ? '<span class="reply-at">' + esc(s.repliedAt) + ' · ' +
+                    (s.replySeen ? '用户已读' : '用户未读') + '</span>'
+                  : '') +
+                '</div>'
+              : '<div class="reply-hint">还没回复。回复后用户端「消息」里会出现未读小红点。</div>') +
+            '<textarea id="fReply" class="reply-input" maxlength="1000" ' +
+              'placeholder="写点什么给用户…"></textarea>' +
+          '</div>' +
+          '<div class="detail-actions">' +
+            '<button class="btn primary" data-act="reply">' +
+              (s.reply ? '更新回复' : '回复') + '</button>' +
+            '<button class="btn" data-act="handle">' +
+              (s.handled ? '标记为未处理' : '标记为已处理') + '</button>' +
+          '</div>' +
+        '</div>';
+      return;
+    }
+    var coord = (s.lat != null && s.lng != null)
+      ? '<span class="mono">' + esc(s.lat + ', ' + s.lng) + '</span>' +
+        ' · <a href="https://uri.amap.com/marker?position=' + encodeURIComponent(s.lng + ',' + s.lat) +
+        '&name=' + encodeURIComponent(s.name || '点位') + '" target="_blank" rel="noopener">在地图查看</a>'
+      : '<span style="color:var(--muted)">未提供坐标</span>';
+
+    var html = '<div class="detail">' +
+      '<div class="detail-head">' +
+        '<h2 class="detail-title">' + esc(s.name) + '</h2>' +
+        '<span class="pill ' + esc(s.status) + '">' + LABEL[s.status] + '</span>' +
+      '</div>' +
+      '<div class="detail-sub">' + esc(timeAgo(s.createdAt)) + ' 提交' +
+        (s.reviewedAt ? ' · ' + esc(s.reviewedAt) + ' 审核' : '') + '</div>';
+
+    html += '<div class="section"><div class="section-label">位置</div>' +
+      '<dl class="kv">' +
+        '<dt>地址</dt><dd>' + esc(s.address || '—') + '</dd>' +
+        '<dt>坐标</dt><dd>' + coord + '</dd>' +
+      '</dl></div>';
+
+    html += '<div class="section"><div class="section-label">用户备注</div>' +
+      (s.note ? '<div class="note-box">' + esc(s.note) + '</div>'
+              : '<div class="note-box" style="color:var(--faint)">用户没有填写备注</div>') +
+      '</div>';
+
+    if (s.status === 'rejected' && s.reviewNote) {
+      html += '<div class="section"><div class="section-label">驳回原因</div>' +
+        '<div class="note-box warn">' + esc(s.reviewNote) + '</div></div>';
+    }
+    if (s.status === 'approved' && s.approvedSpotId) {
+      html += '<div class="section"><div class="section-label">已发布</div>' +
+        '<div class="note-box accent">已作为官方点位发布，ID <span class="mono">' +
+        esc(s.approvedSpotId) + '</span></div></div>';
+    }
+
+    html += '<div class="section"><div class="section-label">投稿人</div>' +
+      '<dl class="kv"><dt>标识</dt><dd class="mono">' + esc(s.ownerId || '—') + '</dd>' +
+      '<dt>提交时间</dt><dd>' + esc(s.createdAt || '—') + '</dd></dl></div>';
+
+    var acts = '';
+    if (s.status === 'pending' || s.status === 'rejected') {
+      acts += '<button class="btn primary" data-act="approve">通过并发布</button>';
+    }
+    if (s.status === 'pending') {
+      acts += '<button class="btn danger" data-act="reject">驳回</button>';
+    }
+    if (s.status === 'approved' && s.approvedSpotId) {
+      acts += '<button class="btn" data-act="edit">编辑已发布点位</button>';
+    }
+    if (s.status === 'approved') {
+      // 已通过的再驳回 = 把它从公开点位里下架
+      acts += '<button class="btn danger" data-act="reject">驳回并下架</button>';
+    }
+    if (acts) html += '<div class="detail-actions">' + acts + '</div>';
+
+    pane.innerHTML = html + '</div>';
+  }
+
+  /* ================= 弹窗 ================= */
+  function openModal(mode, item) {
+    state.mode = mode;
+    $('modal').classList.remove('hidden');
+    if (mode === 'approve') {
+      $('mTitle').textContent = '通过并发布';
+      $('mDesc').textContent = '发布后将作为官方点位出现在小程序点位列表里。';
+      $('mOk').textContent = '确认发布';
+      $('mOk').className = 'btn primary';
+      $('mBody').innerHTML =
+        '<div class="field"><label>点位名称<span class="req">*</span></label>' +
+          '<input id="fName" maxlength="64" value="' + esc(item.name) + '"></div>' +
+        '<div class="two-col">' +
+          '<div class="field"><label>所属城市<span class="req">*</span></label>' +
+            '<input id="fCity" maxlength="32" placeholder="如 青岛"><div class="tip" id="geoTip"></div></div>' +
+          '<div class="field"><label>所属区</label>' +
+            '<input id="fDistrict" maxlength="32" placeholder="如 崂山区"></div>' +
+        '</div>' +
+        '<div class="field"><label>点位简介</label>' +
+          '<textarea id="fDesc" maxlength="2000"></textarea>' +
+          '<div class="tip">展示在点位详情里，可留空；不要填地址</div></div>' +
+        '<div class="field"><label>观察提示</label>' +
+          '<textarea id="fObserve" maxlength="2000">' + esc(item.note || '') + '</textarea>' +
+          '<div class="tip">如「低潮前后两小时最佳」，默认用用户备注</div></div>';
+      autofillGeo(item);
+      setTimeout(function () { var n = $('fName'); if (n) n.focus(); }, 30);
+    } else {
+      $('mTitle').textContent = item.status === 'approved' ? '驳回并下架' : '驳回投稿';
+      $('mDesc').textContent = item.status === 'approved'
+        ? '这条已经发布到小程序点位列表里了 —— 驳回会把它从公开列表下架。'
+        : '驳回后用户在小程序「我的点位」能看到原因。';
+      $('mOk').textContent = '确认驳回';
+      $('mOk').className = 'btn danger';
+      $('mBody').innerHTML =
+        '<div class="field"><label>驳回原因</label>' +
+          '<textarea id="fReason" maxlength="255" placeholder="如：位置不明确、与现有官方点位重复"></textarea>' +
+          '<div class="tip">可留空；填了用户能看到</div></div>';
+      setTimeout(function () { var r = $('fReason'); if (r) r.focus(); }, 30);
+    }
+  }
+
+  function closeModal() {
+    $('modal').classList.add('hidden');
+    state.mode = null;
+    state.busy = false;
+  }
+
+  /** 打开通过弹窗时，按坐标逆地理反查城市/区自动填好 */
+  async function autofillGeo(item) {
+    var tip = $('geoTip');
+    if (!item || item.lat == null || item.lng == null) {
+      if (tip) tip.textContent = '该投稿没有坐标，请手动填写';
+      return;
+    }
+    if (tip) tip.innerHTML = '<span class="spinner-xs"></span>正在按位置识别…';
+    var geo = null;
+    try {
+      geo = await api('/admin/submissions/' + encodeURIComponent(item.id) + '/geo');
+    } catch (e) {
+      if (e.status === 401) { closeModal(); return authLost(); }
+    }
+    // 弹窗可能已被关掉重开，元素要重新取
+    var city = $('fCity'), district = $('fDistrict'), tip2 = $('geoTip');
+    if (!city) return;
+    var c = (geo && geo.city) || '';
+    var d = (geo && geo.district) || '';
+    if (!c && !d) {
+      var guess = guessFromAddress(item.address);   // 高德没查到时退回粗解析地址串
+      c = guess.city; d = guess.district;
+    }
+    if (c) city.value = c;
+    if (d) district.value = d;
+    if (tip2) {
+      tip2.textContent = (c || d)
+        ? '已按地图位置自动填写，可修改'
+        : '未能自动识别，请手动填写';
+    }
+  }
+
+  /** 兜底：从「山东省青岛市崂山区…」这类地址串里抠出城市和区 */
+  function guessFromAddress(address) {
+    var a = address || '';
+    var m = a.match(/([一-龥]{2,8}?(?:市|自治州|地区|盟))/);
+    var d = a.match(/([一-龥]{2,8}?(?:区|县|市|旗))/g);
+    var district = '';
+    if (d) {
+      // 取「市」之后的第一个区/县
+      for (var i = 0; i < d.length; i++) {
+        if (!/市$/.test(d[i])) { district = d[i]; break; }
+      }
+    }
+    return { city: m ? m[1] : '', district: district };
+  }
+
+  /** 反馈里点点位名：直接跳到后台里对应的那条投稿；找不到再退到地图 */
+  async function gotoSpot(item) {
+    if (item.submissionId) {
+      await gotoTabAndSelect(item.submissionStatus || 'approved', item.submissionId);
+      return;
+    }
+    if (item.spotLat != null && item.spotLng != null) {
+      window.open(
+        'https://uri.amap.com/marker?position=' +
+          encodeURIComponent(item.spotLng + ',' + item.spotLat) +
+          '&name=' + encodeURIComponent(item.spotName || '点位'),
+        '_blank'
+      );
+      return;
+    }
+    toast('这条反馈没关联到具体点位');
+  }
+
+  /** 切到某个分类并选中指定投稿（跳转用） */
+  async function gotoTabAndSelect(tabKey, id) {
+    state.tab = tabKey;
+    state.page = 1;
+    renderTabs();
+    await loadList(1);
+    if (findItem(id)) {
+      state.selectedId = id;
+      renderList();
+      renderDetail();
+    } else {
+      toast('这条投稿不在当前列表里（可能翻页了）');
+    }
+  }
+
+  /** 回复用户反馈（回复后用户端「消息」会出现未读） */
+  async function submitReply(item) {
+    var el = $('fReply');
+    var reply = ((el && el.value) || '').trim();
+    if (!reply) {
+      toast('请先写回复内容');
+      if (el) el.focus();
+      return;
+    }
+    try {
+      await api('/admin/feedback/' + encodeURIComponent(item.id) + '/reply', {
+        method: 'POST',
+        body: JSON.stringify({ reply: reply })
+      });
+      toast('已回复，用户端会有未读提示');
+      await refresh();
+    } catch (e) {
+      if (e.status === 401) return authLost();
+      toast(e.message);
+    }
+  }
+
+  /** 标记反馈已处理 / 未处理 */
+  async function markFeedback(item) {
+    try {
+      await api('/admin/feedback/' + encodeURIComponent(item.id) + '/handle', {
+        method: 'POST',
+        body: JSON.stringify({ handled: !item.handled })
+      });
+      toast(item.handled ? '已标为未处理' : '已标为已处理');
+      await refresh();
+    } catch (e) {
+      if (e.status === 401) return authLost();
+      toast(e.message);
+    }
+  }
+
+  /** 编辑已发布点位：先拉官方点位当前值，再填进弹窗 */
+  async function openEdit(item) {
+    var spotId = item && item.approvedSpotId;
+    if (!spotId) return;
+    state.mode = 'edit';
+    state.editSpotId = spotId;
+    $('mTitle').textContent = '编辑已发布点位';
+    $('mDesc').textContent = '改动会立即生效到小程序的点位详情。';
+    $('mOk').textContent = '保存';
+    $('mOk').className = 'btn primary';
+    $('mBody').innerHTML = '<div class="tip"><span class="spinner-xs"></span>正在读取…</div>';
+    $('modal').classList.remove('hidden');
+    try {
+      var sp = await api('/admin/spots/' + encodeURIComponent(spotId));
+      $('mBody').innerHTML =
+        '<div class="field"><label>点位名称<span class="req">*</span></label>' +
+          '<input id="fName" maxlength="64" value="' + esc(sp.name) + '"></div>' +
+        '<div class="two-col">' +
+          '<div class="field"><label>所属城市<span class="req">*</span></label>' +
+            '<input id="fCity" maxlength="32" value="' + esc(sp.city) + '"></div>' +
+          '<div class="field"><label>所属区</label>' +
+            '<input id="fDistrict" maxlength="32" value="' + esc(sp.district || '') + '"></div>' +
+        '</div>' +
+        '<div class="field"><label>热度</label>' +
+          '<input id="fHeat" type="number" value="' + esc(String(sp.heat == null ? 0 : sp.heat)) + '">' +
+          '<div class="tip">数字越大在点位列表里排得越前，官方点位多在 40~100</div></div>' +
+        '<div class="field"><label>点位简介</label>' +
+          '<textarea id="fDesc" maxlength="2000">' + esc(sp.description || '') + '</textarea>' +
+          '<div class="tip">展示在点位详情里，可留空；不要填地址</div></div>' +
+        '<div class="field"><label>观察提示</label>' +
+          '<textarea id="fObserve" maxlength="2000">' + esc(sp.observeHint || '') + '</textarea>' +
+          '<div class="tip">点位详情「可能遇到」下面那句话</div></div>';
+    } catch (e) {
+      closeModal();
+      if (e.status === 401) return authLost();
+      toast(e.message);
+    }
+  }
+
+  async function submitModal() {
+    if (state.busy) return;
+    var item = findItem(state.selectedId);
+    if (!item) return;
+    if (state.mode === 'approve') {
+      var city = ($('fCity').value || '').trim();
+      if (!city) { toast('请填写所属城市'); $('fCity').focus(); return; }
+      var payload = {
+        name: ($('fName').value || '').trim(),
+        city: city,
+        district: ($('fDistrict').value || '').trim(),
+        description: ($('fDesc').value || '').trim(),
+        observeHint: ($('fObserve').value || '').trim()
+      };
+      state.busy = true;
+      try {
+        await api('/admin/submissions/' + encodeURIComponent(item.id) + '/approve', {
+          method: 'POST', body: JSON.stringify(payload)
+        });
+        toast('已发布到官方点位');
+        closeModal();
+        await refresh();
+      } catch (e) {
+        state.busy = false;
+        if (e.status === 401) { closeModal(); return authLost(); }
+        toast(e.message);
+      }
+    } else if (state.mode === 'edit') {
+      var name = ($('fName').value || '').trim();
+      var city = ($('fCity').value || '').trim();
+      if (!name) { toast('点位名称不能为空'); $('fName').focus(); return; }
+      if (!city) { toast('所属城市不能为空'); $('fCity').focus(); return; }
+      var editPayload = {
+        name: name,
+        city: city,
+        district: ($('fDistrict').value || '').trim(),
+        description: ($('fDesc').value || '').trim(),
+        observeHint: ($('fObserve').value || '').trim()
+      };
+      var heatRaw = ($('fHeat').value || '').trim();
+      if (heatRaw !== '') editPayload.heat = parseInt(heatRaw, 10);
+      state.busy = true;
+      try {
+        await api('/admin/spots/' + encodeURIComponent(state.editSpotId) + '/edit', {
+          method: 'POST', body: JSON.stringify(editPayload)
+        });
+        toast('已保存');
+        closeModal();
+        await refresh();
+      } catch (e) {
+        state.busy = false;
+        if (e.status === 401) { closeModal(); return authLost(); }
+        toast(e.message);
+      }
+    } else {
+      var reason = ($('fReason').value || '').trim();
+      state.busy = true;
+      try {
+        await api('/admin/submissions/' + encodeURIComponent(item.id) + '/reject', {
+          method: 'POST', body: JSON.stringify({ reason: reason })
+        });
+        toast('已驳回');
+        closeModal();
+        await refresh();
+      } catch (e) {
+        state.busy = false;
+        if (e.status === 401) { closeModal(); return authLost(); }
+        toast(e.message);
+      }
+    }
+  }
+
+  /* ================= 事件 ================= */
+  $('gateBtn').addEventListener('click', enter);
+  $('gateInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') enter(); });
+  $('logoutBtn').addEventListener('click', function () { _token = ''; showGate(''); });
+  $('refreshBtn').addEventListener('click', function () { refresh(); });
+  $('mCancel').addEventListener('click', closeModal);
+  $('mOk').addEventListener('click', submitModal);
+  $('modal').addEventListener('click', function (e) { if (e.target === $('modal')) closeModal(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
+  $('moreBtn').addEventListener('click', function () { loadList(state.page + 1); });
+
+  $('tabs').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-tab]');
+    if (!b) return;
+    state.tab = b.dataset.tab;
+    state.selectedId = null;
+    renderTabs();
+    loadList(1);
+  });
+
+  $('listScroll').addEventListener('click', function (e) {
+    var row = e.target.closest('.row');
+    if (!row) return;
+    state.selectedId = row.dataset.id;
+    renderList();
+    renderDetail();
+  });
+
+  $('detailPane').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act]');
+    if (!b) return;
+    var item = findItem(state.selectedId);
+    if (!item) return;
+    if (b.dataset.act === 'edit') { openEdit(item); return; }
+    if (b.dataset.act === 'handle') { markFeedback(item); return; }
+    if (b.dataset.act === 'reply') { submitReply(item); return; }
+    if (b.dataset.act === 'goto-spot') { gotoSpot(item); return; }
+    openModal(b.dataset.act, item);
+  });
+
+  /* ================= 启动 ================= */
+  // 不持久化令牌：每次进来都从登录页开始
+  showGate('');
+})();
+</script>
+</body>
+</html>

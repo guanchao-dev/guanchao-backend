@@ -44,6 +44,17 @@ curl -X POST http://127.0.0.1:8000/api/v1/auth/wechat-login -H "Content-Type: ap
 curl http://127.0.0.1:8000/api/v1/me -H "Authorization: Bearer <accessToken>"
 ```
 
+## 管理后台（审核宝藏点位）
+
+用户上传的宝藏点位默认是私有的。管理员通过后台审核后，投稿会发布成官方点位（写进
+`spots` 表），前台 `GET /spots` 立刻可见。
+
+1. 在 `.env` 里配置一个足够长的随机串：`ADMIN_TOKEN=<你的令牌>`（**不填则 `/admin` 相关接口全部 401**）。
+2. 重启服务，浏览器打开 http://127.0.0.1:8000/admin ，在页面里填入同一个令牌。
+3. 待审核列表里可通过（可先编辑名称/城市/简介再发布）或驳回。
+
+接口细节见 `docs/API.md` §一.3。
+
 ## 目录结构
 
 ```
@@ -54,6 +65,7 @@ app/
   schemas/           # Pydantic 模型
   services/          # 微信 / 潮汐 / AI 服务
   api/v1/endpoints/  # 各业务端点
+  static/admin.html  # 审核后台页面（GET /admin）
 ```
 
 ## 统一响应
