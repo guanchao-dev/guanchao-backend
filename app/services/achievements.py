@@ -25,6 +25,7 @@ from app.db.models import (
     User,
     UserMedal,
 )
+from app.services import levels
 from app.services.ai import primary_candidates
 
 # 勋章解锁来源（对应 pending-unlocks / unlock-ack 的 source 字段）
@@ -107,6 +108,8 @@ async def _unlock(db: AsyncSession, user: User, medal_ids: list[str]) -> list[st
     if newly:
         user.score = (user.score or 0) + score_add
         await db.commit()
+        # 成就值是经验的来源之一，等级跟着重算（只在变化时才写库）
+        await levels.sync_user_level(db, user)
     return newly
 
 

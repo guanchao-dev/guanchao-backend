@@ -11,7 +11,7 @@ from app.core.utils import SHANGHAI_TZ
 from app.db.base import get_db
 from app.db.models import Spot
 from app.services import weather as weather_svc
-from app.services.ai import tide_advice
+from app.services.ai import advice_for_request
 from app.services.tide import (
     build_beachcombing_hint,
     build_fallback_advice,
@@ -69,13 +69,15 @@ async def home_today(
     tide = await get_tide_window(spot.id, now, db, spot.lat, spot.lng)
     weather = await weather_svc.current(spot.lat, spot.lng)
     spot_info = {
+        "id": spot.id,
         "name": spot.name,
         "city": spot.city,
         "age_hint": spot.age_hint,
         "safety_tags": spot.safety_tags,
     }
     if withAdvice:
-        advice = await tide_advice(tide, weather, spot_info, now)
+        # AI 文案读每天凌晨 4 点预生成的那份；状态仍按 now 实时算
+        advice = await advice_for_request(db, tide, weather, spot_info, now, now.strftime("%Y-%m-%d"))
     else:
         advice = build_fallback_advice(tide, weather, now)
     beachcombing = build_beachcombing_hint(tide, now)

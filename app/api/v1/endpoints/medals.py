@@ -9,6 +9,7 @@ from app.core.utils import new_id, to_shanghai_iso
 from app.db.base import get_db
 from app.db.models import CommunityFollow, Medal, User, UserMedal
 from app.schemas import ReportEventRequest, ShareRequest, UnlockAckRequest
+from app.services import levels
 from app.services.achievements import grant_medal
 
 router = APIRouter(tags=["achievements"])
@@ -48,19 +49,29 @@ async def overview(user: User | None = Depends(get_optional_user), db: AsyncSess
                 "level": 1,
                 "title": "海洋探索家",
                 "levelProgress": 0,
+                "xp": 0,
+                "xpToNext": levels.LEVEL_THRESHOLDS[1],
+                "visitedSpotCount": 0,
             }
         )
     percent = round(user.score * 100 / total_score) if total_score else 0
+    # 等级 = 成就值 + 去过的点位；顺手同步一次（只在变化时才写库）
+    lv = await levels.sync_user_level(db, user)
     return ok(
         {
             "score": user.score,
             "total": total_score,
+            # percent 是勋章收集度（score/total），跟等级无关
             "percent": percent,
             "unlockedCount": len(unlocked),
             "medalTotal": medal_total,
-            "level": user.level,
+            "level": lv["level"],
             "title": user.title,
-            "levelProgress": percent,
+            # levelProgress 是当前等级内的进度（不是勋章收集度，后者看 percent）
+            "levelProgress": lv["levelProgress"],
+            "xp": lv["xp"],
+            "xpToNext": lv["xpToNext"],
+            "visitedSpotCount": lv["visitedSpotCount"],
         }
     )
 

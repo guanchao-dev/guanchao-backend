@@ -17,11 +17,23 @@ from app.db.models import (
     Species,
     SpeciesPhoto,
     Spot,
+    SpotHarmonics,
 )
 
 # 已废弃的图鉴条目：早期用作「兜底泛称」，现在 AI 认不出会自己给答案，不再需要。
 # 启动时会把这些条目连同相关的收藏/照片一起清掉。
 DEPRECATED_SPECIES = ("sp_shore_crab", "sp_small_fish")
+
+# 已下线点位：坐标无法确认，先从点位列表摘掉，等实地核对坐标再补回。
+# 红石崖 / 红树林 是地理编码按「地名」搜出来的落点不对（分别落在街道中心、
+# 城阳区的产业园）；韩家岭村落点在 20km 外的内陆同名村；顾家岛码头高德搜不到。
+# 启动时连同它们的调和常数一起删（见 _remove_deprecated_spots）。
+DEPRECATED_SPOTS: tuple[str, ...] = (
+    "spot_qd_17",  # 青岛·红石崖
+    "spot_qd_24",  # 青岛·顾家岛码头
+    "spot_qd_25",  # 青岛·红树林
+    "spot_qd_39",  # 青岛·韩家岭村
+)
 
 # ---- 临时下线开关（测试用）----
 # 想临时从图鉴里隐藏某个物种，就把它的 id 加进这个元组，重启后端即可。
@@ -304,26 +316,6 @@ SPOTS = [
         "lng": 120.203651,
     },
     {
-        "id": "spot_qd_17",
-        "name": "青岛·红石崖",
-        "city": "青岛",
-        "district": "黄岛区",
-        "cover_key": "",
-        "open_time": "",
-        "age_hint": "",
-        "safety_tags": [],
-        "observe_hint": "常见生物：皮皮虾、海螺、八爪鱼、螃蟹、毛蛤。",
-        "description": "泥滩地，适合赶海老手，新手容易陷在泥坑、迷路，特别是晚上！建议穿连体涉水裤。导航：导航到红石崖赶海停车场",
-        "gear_list": [],
-        "source": "追潮记团队整理（较热门·区内第4名）",
-        "reviewed_at": "2026-10-04",
-        # 红石崖赶海停车场（红柳河路457号）。原坐标 36.095299,120.112572 是按
-        # 「红石崖」这个大地名地理编码出来的，落在红石崖街道中心（红石崖初级中学），
-        # 离描述的导航目的地「红石崖赶海停车场」还有 800 多米，改用地名搜索命中的停车场坐标。
-        "lat": 36.097684,
-        "lng": 120.121466,
-    },
-    {
         "id": "spot_qd_18",
         "name": "青岛·唐岛湾南岸滩涂",
         "city": "青岛",
@@ -424,43 +416,6 @@ SPOTS = [
         "reviewed_at": "2026-10-04",
         "lat": 35.921758,
         "lng": 120.138033,
-    },
-    {
-        "id": "spot_qd_24",
-        "name": "青岛·顾家岛码头",
-        "city": "青岛",
-        "district": "黄岛区",
-        "cover_key": "",
-        "open_time": "",
-        "age_hint": "",
-        "safety_tags": [],
-        "observe_hint": "常见生物：海螺、螃蟹、蛤蜊、海星。",
-        "description": "沙滩。导航：导航至顾家岛码头",
-        "gear_list": [],
-        "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
-        "reviewed_at": "2026-10-04",
-        "lat": None,
-        "lng": None,
-    },
-    {
-        "id": "spot_qd_25",
-        "name": "青岛·红树林",
-        "city": "青岛",
-        "district": "黄岛区",
-        "cover_key": "",
-        "open_time": "",
-        "age_hint": "",
-        "safety_tags": [],
-        "observe_hint": "常见生物：蛤蜊、蝼蛄虾。",
-        "description": "沙滩。导航：导航至红树林度假世界站",
-        "gear_list": [],
-        "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
-        "reviewed_at": "2026-10-04",
-        # 青岛红树林度假世界（隐珠街道滨海大道3588号，灵山湾）。原坐标
-        # 36.306133,120.30648 逆地理编码落在城阳区棘洪滩街道（力鼎智能科技产业园），
-        # 离声明的黄岛区有 51.9 公里，是按「红树林」字面搜到的产业园。
-        "lat": 35.882874,
-        "lng": 120.063209,
     },
     {
         "id": "spot_qd_26",
@@ -682,23 +637,6 @@ SPOTS = [
         "reviewed_at": "2026-10-04",
         "lat": 36.33622,
         "lng": 120.70048,
-    },
-    {
-        "id": "spot_qd_39",
-        "name": "青岛·韩家岭村",
-        "city": "青岛",
-        "district": "即墨区",
-        "cover_key": "",
-        "open_time": "",
-        "age_hint": "",
-        "safety_tags": [],
-        "observe_hint": "常见生物：螃蟹、海螺、蛤蜊。",
-        "description": "礁石。导航：导航至韩家岭",
-        "gear_list": [],
-        "source": "追潮记团队整理（其他（平列）·未入榜（区内平列））",
-        "reviewed_at": "2026-10-04",
-        "lat": 36.508057,
-        "lng": 120.531821,
     },
     {
         "id": "spot_qd_40",
@@ -1867,6 +1805,20 @@ async def _remove_deprecated_species(session: AsyncSession) -> None:
     await session.execute(delete(Species).where(Species.id.in_(targets)))
 
 
+async def _remove_deprecated_spots(session: AsyncSession) -> None:
+    """删除已下线点位及其调和常数（幂等）。
+
+    坐标没实地核对前不发布，直接从库里摘掉。用户产生的卡片 / 社区笔记 / 签到
+    等历史数据不动：这些地方读点位都是 `db.get(Spot, id)`，取不到会自己兜底。
+    """
+    if not DEPRECATED_SPOTS:
+        return
+    await session.execute(delete(Spot).where(Spot.id.in_(DEPRECATED_SPOTS)))
+    await session.execute(
+        delete(SpotHarmonics).where(SpotHarmonics.spot_id.in_(DEPRECATED_SPOTS))
+    )
+
+
 async def _sync_team_source(session: AsyncSession) -> None:
     """把已有点位/图鉴的来源署名同步成最新团队名（幂等）。
 
@@ -1906,15 +1858,12 @@ SPOT_HEAT = {
     "spot_qd_14": 100,  # 鱼鸣嘴  极热门
     "spot_qd_15": 85,  # 连三岛  热门
     "spot_qd_16": 70,  # 银沙滩  较热门
-    "spot_qd_17": 70,  # 红石崖  较热门
     "spot_qd_18": 70,  # 唐岛湾南岸滩涂  较热门
     "spot_qd_19": 70,  # 灵山卫地铁站南侧滩涂  较热门
     "spot_qd_20": 70,  # 星光岛  较热门
     "spot_qd_21": 55,  # 石雀滩  一般
     "spot_qd_22": 40,  # 南屯码头  其他（平列）
     "spot_qd_23": 40,  # 虹桥待月公园  其他（平列）
-    "spot_qd_24": 40,  # 顾家岛码头  其他（平列）
-    "spot_qd_25": 40,  # 红树林  其他（平列）
     "spot_qd_26": 40,  # 海军公园  其他（平列）
     "spot_qd_27": 40,  # 贝壳广场  其他（平列）
     "spot_qd_28": 100,  # 栈桥  极热门
@@ -1928,7 +1877,6 @@ SPOT_HEAT = {
     "spot_qd_36": 85,  # 滨海公园  热门
     "spot_qd_37": 70,  # 盘龙庄村附近  较热门
     "spot_qd_38": 40,  # 冯家河村  其他（平列）
-    "spot_qd_39": 40,  # 韩家岭村  其他（平列）
     "spot_qd_40": 40,  # 于家沟  其他（平列）
     "spot_qd_41": 40,  # 羊羔涧  其他（平列）
     "spot_wh_chengshantou": 75,  # 威海·成山头
@@ -1978,6 +1926,7 @@ async def _sync_medal_fields(session: AsyncSession) -> None:
 async def seed_if_empty(session: AsyncSession) -> None:
     """按主键补齐种子数据（幂等）。表里已有的行不会被覆盖。"""
     await _seed_missing(session, Spot, SPOTS)
+    await _remove_deprecated_spots(session)
     await _sync_spot_fields(session)
     await _seed_missing(session, Species, SPECIES)
     await _remove_deprecated_species(session)

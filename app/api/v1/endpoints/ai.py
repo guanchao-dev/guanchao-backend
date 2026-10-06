@@ -21,7 +21,7 @@ from app.services.achievements import evaluate_medals
 from app.services.ai import primary_candidates, stored_items
 from app.services.ai import species_guess as ai_species_guess
 from app.services.ai import trash_guess as ai_trash_guess
-from app.services.ai import tide_advice
+from app.services.ai import advice_for_request
 from app.services import weather as weather_svc
 from app.services.tide import build_beachcombing_hint, get_tide
 
@@ -151,16 +151,22 @@ async def ai_tide_advice(body: TideAdviceRequest, db: AsyncSession = Depends(get
     if spot is None:
         raise NotFoundError("点位不存在")
 
-    tide = await get_tide(spot.id, body.date, lat=spot.lat, lng=spot.lng)
+    # 刻意不把 body.date 透传给 get_tide()：传了 day 的话 currentHeightM/trend 取的是
+    # 「那天 12:00」的值（tide.py 里的既定行为），「现在适不适合赶海」就变成按天算了。
+    # 这里要的是「此刻」。date 只用来查每日预生成的那份文案。
+    tide = await get_tide(spot.id, None, lat=spot.lat, lng=spot.lng)
     weather = await weather_svc.current(spot.lat, spot.lng)
     now = datetime.now(SHANGHAI_TZ)
+    advice_date = body.date or now.strftime("%Y-%m-%d")
     spot_info = {
+        "id": spot.id,
         "name": spot.name,
         "city": spot.city,
         "age_hint": spot.age_hint,
         "safety_tags": spot.safety_tags,
     }
-    advice = await tide_advice(tide, weather, spot_info, now)
+    # AI 文案读每天凌晨 4 点预生成的那份；状态（suitableNow / 时段）仍按此刻实时算
+    advice = await advice_for_request(db, tide, weather, spot_info, now, advice_date)
 
     # 补上「推荐时间 / 离场时间 / 推荐地点」这三样。
     # bestWindow 与 leaveBefore 潮汐服务里已经算好了（低潮前后最合适），

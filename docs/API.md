@@ -263,6 +263,9 @@ lat / lng / note / photoUrl / status / reviewNote / approvedSpotId / reviewedAt 
 |---|---|---|
 | `lit` | bool | 调用方身份是否已点亮该物种 |
 
+> 后来又加了**关键词搜索**（多带一个 `keyword` 参数，匹配名称/别名/简介/栖息地并按命中位置排序）——
+> 详见 `docs/API-v2.md` §十二。
+
 ### `POST /ai/trash-guess` — 垃圾识别
 
 响应新增垃圾总量档位：

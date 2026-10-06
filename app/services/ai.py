@@ -234,16 +234,18 @@ async def _advice_text(
     wx_prompt_line = f"- 天气：{wx_text}\n" if wx_text else ""
     prompt = (
         f"今天{spot.get('name', '海边')}（{spot.get('city', '')}）的潮汐与天气：\n"
-        f"- 当前潮高约 {tide['currentHeightM']} 米，趋势 {tide['trend']}（rising=涨潮 falling=退潮）\n"
+        f"- 当日潮高约 {tide['currentHeightM']} 米，潮汐趋势 {tide['trend']}（rising=涨潮 falling=退潮）\n"
         f"- 潮汐点：{points}\n"
         f"{wx_prompt_line}"
         f"- 点位适龄提示：{spot.get('age_hint', '')}；安全提示：{'、'.join(spot.get('safety_tags', []))}\n"
         f"- 赶海判断：{beach.get('label', '')}，{beach.get('reason', '')}，{beach.get('goAdvice', '')}\n"
         f"{best_line}{leave_line}\n"
         f"请为赶海的小朋友（小学中高年级）写一段出门建议。\n"
+        f"**这条建议是当天凌晨一次性生成、全天内被反复展示的**，所以一律用「今天」表述，"
+        f"绝对不要出现「现在」「目前」「此刻」这类跟具体时刻绑定的词。\n"
         f"**body 只写两件事**：\n"
-        f"1. 当前潮汐状态（在涨潮还是退潮、潮高大约多少）；\n"
-        f"2. 什么时候适合赶海、什么时候该离开（请用上面给的具体时间点）。\n"
+        f"1. 今天的潮汐情况（是涨潮还是退潮、潮高大约多少）；\n"
+        f"2. 今天什么时候适合赶海、什么时候该离开（请用上面给的具体时间点）。\n"
         f"**不要写**：天气、气温、穿衣、装备、以及泛泛的安全叮嘱"
         f"（这些前端另有位置展示，写进来会被过滤掉）。\n"
         f"要求：2 到 3 句短句、语气温和、不恐吓、不鼓励冒险，"
@@ -270,12 +272,12 @@ async def _advice_text(
     return headline, body
 
 
-_advice_cache: dict[str, tuple[float, dict]] = {}
-_ADVICE_TTL = 3600  # 秒：同一地点同一小时内复用 AI 建议，避免频繁重新生成
-
-
 async def tide_advice(tide: dict, weather: dict, spot: dict, now: datetime) -> dict:
-    """潮汐出门建议。AI 融合潮汐/天气/赶海时机生成 headline/body；失败降级为规则模板。"""
+    """生成一份潮汐出门建议（**给每日预生成任务用，不在请求路径上**）。
+
+    AI 融合潮汐/天气/赶海时机生成 headline/body；失败降级为规则模板。
+    用户请求走 `advice_for_request()` —— 它读的是这里预生成并存库的结果。
+    """
     from app.services.tide import build_beachcombing_hint, build_fallback_advice  # 局部导入避免循环依赖
 
     fallback = build_fallback_advice(tide, weather, now)
@@ -306,12 +308,6 @@ async def tide_advice(tide: dict, weather: dict, spot: dict, now: datetime) -> d
     if not settings.dashscope_api_key:
         return fallback
 
-    # 缓存：同一地点同一小时内复用 AI 建议，避免每次刷新文案都变
-    cache_key = f"{spot.get('name', '')}:{now.strftime('%Y-%m-%dT%H')}"
-    cached = _advice_cache.get(cache_key)
-    if cached is not None and cached[0] > time.monotonic():
-        return cached[1]
-
     try:
         headline, body = await _advice_text(
             tide, weather, spot, beach, fallback.get("leaveBefore")
@@ -321,10 +317,60 @@ async def tide_advice(tide: dict, weather: dict, spot: dict, now: datetime) -> d
         advice["body"] = body
         advice["generatedBy"] = "ai"
         advice["fallback"] = False
-        _advice_cache[cache_key] = (time.monotonic() + _ADVICE_TTL, advice)
         return advice
     except Exception:
         return fallback
+
+
+async def advice_for_request(
+    db, tide: dict, weather: dict, spot: dict, now: datetime, date_str: str
+) -> dict:
+    """请求路径上的出行建议：**AI 文案读预生成的库，状态仍按此刻实时算**。
+
+    每天凌晨 4 点会把每个点位的建议生成好存进 `spot_advice`（见 advice_prewarm），
+    这里只读那份；库里没有（新点位 / 当天还没跑到）就退回规则模板。
+
+    suitableNow / leaveBefore / nextChange 这些跟「此刻」绑定的字段仍按 `now` 算，
+    所以晚上打开不会显示白天才成立的内容 —— 前端那张卡片渲染的正是这几个字段。
+    """
+    from app.core.utils import to_shanghai_iso
+    from app.services import advice_prewarm  # 局部导入：它反过来要用本模块的 tide_advice
+    from app.services.tide import build_beachcombing_hint, build_fallback_advice
+
+    fallback = build_fallback_advice(tide, weather, now)
+    beach = build_beachcombing_hint(tide, now)
+    wx_text_no_temp = weather_line(weather or {})
+    if beach.get("goAdvice"):
+        fallback["body"] = f"{fallback['body']} {beach['goAdvice']}"
+
+    if beach.get("blocked"):
+        return {
+            "headline": "现在不适合赶海",
+            "body": beach["goAdvice"],
+            "suitableNow": False,
+            "suitableForLowerGrade": True,
+            "leaveBefore": None,
+            "nextChange": {},
+            "weatherLine": f"今天{wx_text_no_temp}。" if wx_text_no_temp else "",
+            "safetyLine": "请由大人陪同；不要独自下水；以现场警示和官方预警为准。",
+            "disclaimer": "潮汐与天气仅供参考，出海或近水活动请以海洋预报和现场管理为准。",
+            "generatedBy": "rule",
+            "fallback": True,
+            "adviceDate": date_str,
+            "generatedAt": None,
+        }
+
+    row = await advice_prewarm.load_advice(db, str(spot.get("id") or ""), date_str)
+    advice = dict(fallback)
+    advice["adviceDate"] = date_str
+    advice["generatedAt"] = None
+    if row is not None and row.headline and row.body:
+        advice["headline"] = row.headline
+        advice["body"] = row.body
+        advice["generatedBy"] = row.generated_by or "ai"
+        advice["fallback"] = False
+        advice["generatedAt"] = to_shanghai_iso(row.created_at)
+    return advice
 
 
 # 低于这个把握度的候选不再展示。0.35 是 _confidence_label 里「也有可能」的下界，

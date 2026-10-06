@@ -1,17 +1,19 @@
 from math import asin, cos, radians, sin, sqrt
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_identity
+from app.core.deps import get_current_user, get_identity
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.response import ok, paginated
 from app.core.utils import new_id, to_shanghai_iso
 from app.db.base import get_db
-from app.db.models import Spot, Upload, UserSpot
-from app.schemas import UserSpotCreateRequest
-from app.services import storage
+from app.db.models import Spot, SpotVisit, Upload, User, UserSpot
+from app.schemas import UserSpotCreateRequest, VisitSpotRequest
+from app.services import levels, storage
+from app.services.spot_search import spot_keyword_order, spot_keyword_where
 from app.services.content_safety import assert_text_safe
 
 # 一条投稿最多几张图
@@ -90,19 +92,18 @@ async def list_spots(
     q = select(Spot)
     if city:
         q = q.where(Spot.city == city)
-    if keyword:
-        kw = keyword.strip()
-        q = q.where(
-            or_(
-                Spot.name.contains(kw),
-                Spot.city.contains(kw),
-                Spot.observe_hint.contains(kw),
-                Spot.description.contains(kw),
-            )
-        )
+    # 关键词搜索：匹配名称/区/城市/提示/描述，并按命中位置排（见 services/spot_search.py）。
+    # 不传 keyword 时保持原来的「按热度排」。
+    kw = (keyword or "").strip()
+    order_by = [Spot.heat.desc(), Spot.id]
+    if kw:
+        q = q.where(spot_keyword_where(kw))
+        order_by = spot_keyword_order(kw)
     total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar() or 0
     rows = (
-        await db.execute(q.order_by(Spot.heat.desc(), Spot.id).offset((page - 1) * pageSize).limit(pageSize))
+        await db.execute(
+            q.order_by(*order_by).offset((page - 1) * pageSize).limit(pageSize)
+        )
     ).scalars().all()
     items = [_spot_list_item(s, lat, lng) for s in rows]
     return ok(paginated(items, page, pageSize, total))
@@ -220,6 +221,102 @@ async def list_treasure_spots(
         )
     ).scalars().all()
     return ok(paginated([_spot_list_item(s, lat, lng) for s in rows], page, pageSize, total))
+
+
+@router.get("/spots/visited")
+async def list_visited_spots(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """我点亮过的赶海点（「我的赶海点」页）。
+
+    ⚠️ 必须声明在 /spots/{spot_id} 之前，否则 "visited" 会被当成点位 ID。
+    返回**全部**点位并逐个打 `visited` 标记，外加 total / visitedCount ——
+    前端据此画进度条和点亮墙。「去过」的口径见 services/levels.py::visited_spot_ids
+    （显式点亮 ∪ 观潮记录 ∪ 打卡记录）。
+    """
+    spots = (
+        await db.execute(select(Spot).order_by(Spot.heat.desc(), Spot.id))
+    ).scalars().all()
+    visited_ids = await levels.visited_spot_ids(db, user.id)
+    items = []
+    for s in spots:
+        photos = [storage.public_url(k) for k in (s.photo_keys or []) if k]
+        if not photos and s.cover_key:
+            photos = [storage.public_url(s.cover_key)]
+        items.append(
+            {
+                "id": s.id,
+                "name": s.name,
+                "city": s.city,
+                "district": s.district or "",
+                "icon": photos[0] if photos else "",
+                "visited": s.id in visited_ids,
+            }
+        )
+    return ok(
+        {
+            "total": len(items),
+            "visitedCount": sum(1 for i in items if i["visited"]),
+            "list": items,
+        }
+    )
+
+
+@router.post("/spots/{spot_id}/visit")
+async def visit_spot(
+    spot_id: str,
+    body: VisitSpotRequest | None = None,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """点亮一个赶海点（幂等）。观潮结束时前端会调。
+
+    同一用户同一点位只记一次；**每去一个新的点位就多一份经验**
+    （`XP_PER_SPOT`，见 services/levels.py），所以新点亮时会顺手把等级重算一遍，
+    返回值里直接带上最新经验/等级，前端不用再查一次。
+    """
+    spot = await db.get(Spot, spot_id)
+    if spot is None:
+        raise NotFoundError("点位不存在")
+    existing = (
+        await db.execute(
+            select(SpotVisit).where(SpotVisit.user_id == user.id, SpotVisit.spot_id == spot_id)
+        )
+    ).scalar_one_or_none()
+    newly = existing is None
+    if newly:
+        db.add(
+            SpotVisit(
+                id=new_id("sv"),
+                user_id=user.id,
+                spot_id=spot_id,
+                session_id=str((body.sessionId if body else "") or "")[:64],
+                first_visited_at=str((body.visitedAt if body else "") or "")[:32],
+            )
+        )
+        try:
+            await db.commit()
+        except IntegrityError:
+            # 「先查后插」不是原子的：并发下两个请求会同时判定为「新点亮」，
+            # 靠 uk_spot_visits_user_spot 在库层拦住，这里当成已点亮处理，别抛 500。
+            await db.rollback()
+            newly = False
+    if newly:
+        # 去过的点位多了一个 → 经验/等级跟着变（只在变化时才写库）
+        info = await levels.sync_user_level(db, user)
+    else:
+        info = await levels.user_progress(db, user)
+    return ok(
+        {
+            "visited": True,
+            "newlyVisited": newly,
+            "spotId": spot_id,
+            "visitedSpotCount": info["visitedSpotCount"],
+            "xp": info["xp"],
+            "level": info["level"],
+        }
+    )
 
 
 @router.delete("/spots/{spot_id}")

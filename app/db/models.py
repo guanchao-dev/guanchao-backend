@@ -369,6 +369,57 @@ class TideCache(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class SpotAdvice(Base):
+    """每日出行建议（AI 预生成，按点位 + 日期存一条）。
+
+    为什么落库：小程序不允许跟 AI 对话，建议不能「用户点一次、后端调一次 AI」。
+    改成每天凌晨 4 点对每个点位生成一次（见 services/advice_prewarm.py），
+    接口读这份存好的（见 services/ai.py::advice_for_request）。
+
+    - date 为北京时间日期 YYYY-MM-DD；id 固定 `adv_{spot_id}_{date}`，天然幂等；
+    - headline / body 是 AI 写的文案；AI 失败时降级成规则模板，generated_by 记 "rule"；
+    - 「此刻适不适合赶海 / 最佳时段」这类跟时间绑定的字段**不入库**，请求时按潮汐实时算。
+    """
+
+    __tablename__ = "spot_advice"
+    __table_args__ = (
+        UniqueConstraint("spot_id", "date", name="uk_spot_advice_spot_date"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    spot_id: Mapped[str] = mapped_column(String(64), index=True)
+    date: Mapped[str] = mapped_column(String(10), index=True)
+    headline: Mapped[str] = mapped_column(String(128), default="")
+    body: Mapped[str] = mapped_column(Text, default="")
+    generated_by: Mapped[str] = mapped_column(String(16), default="ai")  # ai | rule
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SpotVisit(Base):
+    """用户去过的赶海点位（点亮记录）。一个用户一个点位一行。
+
+    由 `POST /spots/{spot_id}/visit` 写入（观潮结束时前端会调），幂等。
+    `GET /spots/visited` 读它给「我的赶海点」页画点亮墙与进度。
+
+    注意「去过」在业务上是**三个来源的并集**：本表（显式点亮）、观潮记录、打卡记录 ——
+    见 services/levels.py::visited_spot_ids。老用户没点亮过，但观潮/打卡历史照样算数。
+    """
+
+    __tablename__ = "spot_visits"
+    __table_args__ = (
+        UniqueConstraint("user_id", "spot_id", name="uk_spot_visits_user_spot"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    spot_id: Mapped[str] = mapped_column(String(64), index=True)
+    # 是哪次观潮点亮的（前端会把 sessionId 带过来）；可空，只作追溯用
+    session_id: Mapped[str] = mapped_column(String(64), default="")
+    # 前端上报的「到访时刻」（ISO 串，原样存）；可空
+    first_visited_at: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class CommunityTopic(Base):
     """社区话题（观察分享的分类标签）。"""
 

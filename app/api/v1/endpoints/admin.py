@@ -23,7 +23,7 @@ from app.schemas import (
     RejectSubmissionRequest,
     ReplyFeedbackRequest,
 )
-from app.services import amap, storage
+from app.services import advice_prewarm, amap, storage
 from app.services.content_safety import assert_text_safe
 from app.services.tide_predict import harmonics_from_coords
 
@@ -446,3 +446,22 @@ async def reply_feedback(
     r.handled = True
     await db.commit()
     return ok({"id": r.id, "reply": r.reply, "repliedAt": r.replied_at})
+
+
+@router.post("/admin/advice/generate")
+async def generate_advice(
+    date: str | None = Query(None),
+    force: int = Query(0, ge=0, le=1),
+):
+    """手动补生成某天的「出行建议」（默认今天，北京时间）。
+
+    平时由后端进程内的每日任务在凌晨 4 点自动跑（见 services/advice_prewarm.py）。
+    这个接口用于：补历史、某天生成失败后重跑、新增点位后补当天。
+    幂等 —— 已生成的点位会跳过；`force=1` 时覆盖重生成。
+    """
+    date_str = (date or advice_prewarm.today_str()).strip()
+    try:
+        datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        raise BadRequestError("date 格式应为 YYYY-MM-DD") from None
+    return ok(await advice_prewarm.generate_for_date(date_str, force=bool(force)))

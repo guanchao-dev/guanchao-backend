@@ -153,6 +153,18 @@ class UnlockAckRequest(BaseModel):
     clientTime: str | None = None
 
 
+class VisitSpotRequest(BaseModel):
+    """点亮一个赶海点（POST /spots/{spot_id}/visit）。
+
+    两个字段都可选，服务端只作追溯记录，不参与判定：
+    - sessionId：是哪次观潮结束时点亮的；
+    - visitedAt：前端上报的到访时刻（ISO 串，原样存）。
+    """
+
+    sessionId: str | None = None
+    visitedAt: str | None = None
+
+
 class UpdateNicknameRequest(BaseModel):
     nickname: str
 

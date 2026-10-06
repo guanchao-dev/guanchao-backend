@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import Response
-from sqlalchemy import String, cast, delete, func, or_, select
+from sqlalchemy import String, case, cast, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.uploads import (
@@ -61,16 +61,36 @@ async def list_species(
     q = select(Species)
     if category:
         q = q.where(Species.category == category)
-    if keyword:
+    # 搜索：名称 / 别名 / 简介 / 栖息地 四处都算命中。
+    # 排序按「命中得越靠前」铺：名字完全相同 > 名字前缀 > 名字包含 > 别名 > 正文。
+    # 不排的话搜「蟹」会先蹦出正文里提了一句蟹的物种，名字就叫「××蟹」的反而排在后面。
+    # autoescape=True 让用户输的 % 和 _ 当普通字符，不当通配符。
+    kw = (keyword or "").strip()
+    order_by = [Species.id]
+    if kw:
         q = q.where(
             or_(
-                Species.name.contains(keyword),
-                cast(Species.aka, String).contains(keyword),
+                Species.name.contains(kw, autoescape=True),
+                cast(Species.aka, String).contains(kw, autoescape=True),
+                Species.summary.contains(kw, autoescape=True),
+                Species.habitat.contains(kw, autoescape=True),
             )
         )
+        order_by = [
+            case(
+                (Species.name == kw, 0),
+                (Species.name.startswith(kw, autoescape=True), 1),
+                (Species.name.contains(kw, autoescape=True), 2),
+                (cast(Species.aka, String).contains(kw, autoescape=True), 3),
+                else_=4,
+            ),
+            Species.id,
+        ]
     total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar() or 0
     rows = (
-        await db.execute(q.order_by(Species.id).offset((page - 1) * pageSize).limit(pageSize))
+        await db.execute(
+            q.order_by(*order_by).offset((page - 1) * pageSize).limit(pageSize)
+        )
     ).scalars().all()
     items = [
         {

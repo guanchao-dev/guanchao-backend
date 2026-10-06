@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.response import ok, paginated
 from app.db.base import get_db
 from app.db.models import Species, Spot
+from app.services.spot_search import spot_keyword_order, spot_keyword_where
 
 router = APIRouter(tags=["search"])
 
@@ -20,23 +21,29 @@ async def search(
     kw = keyword.strip()
 
     spots_q = select(Spot)
+    spot_order = [Spot.id]
     if kw:
-        spots_q = spots_q.where(
-            or_(
-                Spot.name.contains(kw),
-                Spot.city.contains(kw),
-                Spot.description.contains(kw),
-                Spot.observe_hint.contains(kw),
-            )
-        )
+        # 与 GET /spots?keyword= 共用一套匹配与排序（见 services/spot_search.py）——
+        # 两处口径不一致的话，同一个词在首页搜索和点位列表里会搜出不同结果。
+        spots_q = spots_q.where(spot_keyword_where(kw))
+        spot_order = spot_keyword_order(kw)
     spots_total = (
         await db.execute(select(func.count()).select_from(spots_q.subquery()))
     ).scalar() or 0
     spots = (
-        await db.execute(spots_q.order_by(Spot.id).offset((page - 1) * pageSize).limit(pageSize))
+        await db.execute(
+            spots_q.order_by(*spot_order).offset((page - 1) * pageSize).limit(pageSize)
+        )
     ).scalars().all()
     spot_items = [
-        {"id": s.id, "name": s.name, "city": s.city, "observeHint": s.observe_hint}
+        {
+            "id": s.id,
+            "name": s.name,
+            "city": s.city,
+            # 区要带上：搜「黄岛」「崂山」这类按区搜的时候，列表里得能看出是哪个区
+            "district": s.district or "",
+            "observeHint": s.observe_hint,
+        }
         for s in spots
     ]
 

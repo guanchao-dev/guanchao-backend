@@ -1,5 +1,6 @@
+import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -11,6 +12,7 @@ from app.db import models  # noqa: F401  确保模型注册到 Base.metadata
 from app.db.base import Base, async_session_factory, engine
 from app.db.migrate import run_migrations
 from app.db.seed import seed_if_empty
+from app.services import advice_prewarm
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +42,13 @@ async def lifespan(app: FastAPI):
     await _step("数据库迁移", run_migrations())
     async with async_session_factory() as session:
         await _step("种子数据 seed", seed_if_empty(session))
+    # 出行建议的每日预生成：每天凌晨 4 点跑一遍（+ 启动补生成）。
+    # 任务内部自己兜异常，不会因为 AI/网络问题把服务拖下水。
+    prewarm_task = asyncio.create_task(advice_prewarm.run_daily_loop())
     yield
+    prewarm_task.cancel()
+    with suppress(asyncio.CancelledError):
+        await prewarm_task
     await engine.dispose()
 
 

@@ -13,6 +13,7 @@ from app.core.response import ok
 from app.core.security import create_access_token, create_refresh_token, hash_token
 from app.core.utils import new_id
 from app.db.base import get_db
+from app.services import levels
 from app.services.achievements import evaluate_medals
 from app.db.models import (
     Card,
@@ -121,6 +122,8 @@ async def wechat_login(
     # 登录即结算一次：有些成就是「登录」本身触发的（如活动期间登录）。
     # 放在发 token 之前，让返回的用户数据带上新的分数。
     await evaluate_medals(db, user)
+    # 分数或去过点位可能变了，顺手把等级刷一下（只在变化时才写库）
+    await levels.sync_user_level(db, user)
     return ok(await _issue_tokens(db, user))
 
 
@@ -148,15 +151,22 @@ async def me(user: User = Depends(get_current_user), db: AsyncSession = Depends(
             select(func.count()).select_from(Checkin).where(Checkin.user_id == user.id)
         )
     ).scalar() or 0
+    # 等级 = 成就值 + 去过的点位，读的时候顺手同步一次（只在变化时才写库）。
+    lv = await levels.sync_user_level(db, user)
     return ok(
         {
             "id": user.id,
             "nickname": user.nickname,
             "avatarUrl": _avatar_url(user),
-            "level": user.level,
+            "level": lv["level"],
             "title": user.title,
             "score": user.score,
             "total": user.total,
+            # 等级进度：xp 是「成就值 + 点位数 × 60」，levelProgress 是当前级内的百分比
+            "xp": lv["xp"],
+            "xpToNext": lv["xpToNext"],
+            "levelProgress": lv["levelProgress"],
+            "visitedSpotCount": lv["visitedSpotCount"],
             "stats": {
                 "checkinCount": checkin_count,
             },
