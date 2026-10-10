@@ -29,7 +29,10 @@ class Settings(BaseSettings):
     dashscope_api_key: str = ""
     dashscope_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     qwen_text_model: str = "qwen-plus"
-    qwen_vl_model: str = "qwen-vl-max"
+    # 视觉理解。qwen-vl-max / qwen-vl-plus 已于 2026-10-10 随百炼大规模下线（整条
+    # qwen-vl-* 独立视觉端点线被砍，视觉能力并入 Qwen3.7/3.8 通用模型），改用 qwen3.7-plus。
+    # 消息格式（image_url）与原来完全一致，只有 model 字符串变了。
+    qwen_vl_model: str = "qwen3.7-plus"
 
     # 潮汐数据（和风天气 QWeather 海洋潮汐 API）
     tide_api_host: str = "https://nq3jpjg4yq.re.qweatherapi.com"

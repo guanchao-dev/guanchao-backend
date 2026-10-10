@@ -1,6 +1,7 @@
 """通义千问（DashScope）客户端 + AI 能力实现。
 
-- 文本生成用 `qwen_text_model`（默认 qwen-plus），视觉理解用 `qwen_vl_model`（默认 qwen-vl-max）。
+- 文本生成用 `qwen_text_model`（默认 qwen-plus），视觉理解用 `qwen_vl_model`（默认 qwen3.7-plus）。
+  qwen-vl-max / qwen-vl-plus 已于 2026-10-10 随百炼大规模下线，视觉能力并入 Qwen3.7/3.8 通用模型。
 - 走 OpenAI 兼容模式（dashscope_base_url）。
 - 潮汐建议 / 图鉴卡失败时优雅降级为规则模板；物种猜测失败时抛 AiUnavailableError（50003，与文档一致）。
 """
@@ -698,8 +699,10 @@ async def species_guess(
             _messages(prompt_text),
             model=settings.qwen_vl_model,
             temperature=0,  # 降到 0：同一张照片尽量给出稳定结果
-            # 多物品返回体明显变长，给足 token 和超时（前端 aiApi 是 25s 超时，留余量）
-            max_tokens=1200,
+            # 生成耗时 ≈ 输出 token 数 ÷ 速度，是这条链路延迟的大头，所以卡着给：
+            # 600 够 items（最多 3 项 × 1~3 个候选）写完，比原来的 1200 少跑一半输出。
+            # timeout 20 留余量（前端 aiApi 是 25s 超时）。
+            max_tokens=600,
             timeout=20,
         )
         return _parse_json(raw)
