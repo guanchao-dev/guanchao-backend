@@ -8,6 +8,14 @@ from app.db.base import engine
 
 # 表名 -> [(列名, MySQL 列定义)]  —— 新增列
 _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
+    "users": [
+        # 封禁（管理后台）。原因/时间只给管理员看，不下发用户端
+        ("banned", "BOOLEAN NOT NULL DEFAULT 0"),
+        ("ban_reason", "VARCHAR(255) NOT NULL DEFAULT ''"),
+        ("banned_at", "VARCHAR(32) NOT NULL DEFAULT ''"),
+        ("coins", "INT NOT NULL DEFAULT 0"),
+        ("coins_seeded", "BOOLEAN NOT NULL DEFAULT 0"),
+    ],
     "user_medals": [
         ("acked", "BOOLEAN NOT NULL DEFAULT 0"),
         ("source", "VARCHAR(16) NOT NULL DEFAULT 'other'"),
@@ -27,6 +35,8 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
     ],
     "uploads": [
         ("owner_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
+        ("used_at", "VARCHAR(32) NOT NULL DEFAULT ''"),
+        ("used_resident_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
     ],
     "guesses": [
         ("owner_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
@@ -44,6 +54,11 @@ _COLUMN_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
     ],
     "species_unlocks": [
         ("seen", "BOOLEAN NOT NULL DEFAULT 0"),
+    ],
+    "aquarium_residents": [
+        ("scale", "FLOAT NOT NULL DEFAULT 1.0"),
+        ("species_name", "VARCHAR(64) NOT NULL DEFAULT ''"),
+        ("rotation", "INT NOT NULL DEFAULT 0"),
     ],
     "feedback": [
         # 点位详情页的反馈按钮带上的点位 id；空串 = 「关于」页的通用反馈

@@ -34,3 +34,6 @@ __pycache__/
 # ===== 日志与临时文件 =====
 *.log
 *.tmp
+
+# ===== 本地 AI 模型（按 models/README.md 下载，不进 git）=====
+models/**/*.onnx

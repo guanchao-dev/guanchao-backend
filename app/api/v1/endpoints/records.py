@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user, get_identity
+from app.core.deps import get_current_user, get_guest_identity, get_identity
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.response import ok, paginated
 from app.core.utils import SHANGHAI_TZ, new_id, to_shanghai_iso
@@ -113,10 +113,10 @@ async def checkins(
 @router.post("/records/checkin")
 async def create_checkin(
     body: ReportCheckinRequest,
-    identity: tuple = Depends(get_identity),
+    identity: tuple = Depends(get_guest_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    """研学报到签到。游客可调（身份由表单自带，不依赖账号）。
+    """研学报到签到。**允许游客**（身份由表单自带，不依赖账号）。
 
     同一设备/用户同一天重复提交 → 幂等返回首次结果，不报 409。
     """

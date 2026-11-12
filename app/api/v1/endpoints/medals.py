@@ -9,10 +9,18 @@ from app.core.utils import new_id, to_shanghai_iso
 from app.db.base import get_db
 from app.db.models import CommunityFollow, Medal, User, UserMedal
 from app.schemas import ReportEventRequest, ShareRequest, UnlockAckRequest
-from app.services import levels
+from app.services import levels, storage
 from app.services.achievements import grant_medal
 
 router = APIRouter(tags=["achievements"])
+
+
+def _avatar_url(u) -> str:
+    """头像地址：COS 开着时给签名直链，省掉一次 302 往返。"""
+    if not getattr(u, "avatar_key", ""):
+        return ""
+    url = storage.public_url(u.avatar_key)
+    return url if url.startswith("http") else f"/users/{u.id}/avatar"
 
 # 可以由前端上报的动作 → 勋章 id。
 # 做成白名单而不是「前端传什么就发什么」：否则任何人都能拿这个接口把勋章刷满。
@@ -42,6 +50,7 @@ async def overview(user: User | None = Depends(get_optional_user), db: AsyncSess
         return ok(
             {
                 "score": 0,
+                "coins": 0,
                 "total": total_score,
                 "percent": 0,
                 "unlockedCount": 0,
@@ -60,6 +69,7 @@ async def overview(user: User | None = Depends(get_optional_user), db: AsyncSess
     return ok(
         {
             "score": user.score,
+            "coins": user.coins or 0,
             "total": total_score,
             # percent 是勋章收集度（score/total），跟等级无关
             "percent": percent,
@@ -293,7 +303,7 @@ async def friends(user: User = Depends(get_current_user)):
                 {
                     "userId": user.id,
                     "nickname": user.nickname,
-                    "avatarUrl": f"/users/{user.id}/avatar" if user.avatar_key else "",
+                    "avatarUrl": _avatar_url(user),
                     "level": user.level,
                     "score": user.score,
                     "me": True,
@@ -368,7 +378,7 @@ async def leaderboard(
                 "rank": (page - 1) * size + i + 1,
                 "userId": u.id,
                 "nickname": u.nickname,
-                "avatarUrl": f"/users/{u.id}/avatar" if u.avatar_key else "",
+                "avatarUrl": _avatar_url(u),
                 "level": u.level,
                 "score": u.score,
                 "me": user is not None and u.id == user.id,

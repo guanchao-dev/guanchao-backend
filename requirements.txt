@@ -14,3 +14,5 @@ qrcode
 # 腾讯云 COS（图片存储）。没配 COS 的环境用不到，但装了不影响；
 # 见 app/services/storage.py —— 缺配置会自动回退本地磁盘。
 cos-python-sdk-v5>=1.9.30
+# 潮池 AI 抠图（u2netp，CPU）；模型文件见 models/README.md
+rembg[cpu]>=2.0.60

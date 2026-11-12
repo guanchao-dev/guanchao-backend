@@ -18,6 +18,8 @@ from app.db.models import (
     SpeciesPhoto,
     Spot,
     SpotHarmonics,
+    User,
+    UserMedal,
 )
 
 # 已废弃的图鉴条目：早期用作「兜底泛称」，现在 AI 认不出会自己给答案，不再需要。
@@ -33,6 +35,18 @@ DEPRECATED_SPOTS: tuple[str, ...] = (
     "spot_qd_24",  # 青岛·顾家岛码头
     "spot_qd_25",  # 青岛·红树林
     "spot_qd_39",  # 青岛·韩家岭村
+)
+
+# 已废弃的勋章：最早那 5 枚（初次见面/探索新星/无畏冒险家/宝藏猎人/解谜达人）。
+# 前端正式版只认众筹的那 13 枚（图片路径都写死了），后端配合收成 13 枚。
+# 启动时把这 5 枚连同「已发给用户的记录」一起删掉，并把受影响用户的积分重算
+# —— 勋章没了分还留着的话，完成度会超过 100%、等级也会虚高（见 _remove_deprecated_medals）。
+DEPRECATED_MEDALS: tuple[str, ...] = (
+    "medal_1",  # 初次见面
+    "medal_2",  # 探索新星
+    "medal_3",  # 无畏冒险家
+    "medal_4",  # 宝藏猎人
+    "medal_5",  # 解谜达人
 )
 
 # ---- 临时下线开关（测试用）----
@@ -688,6 +702,728 @@ SPOTS = [
         "reviewed_at": "2026-08-01",
         "lat": 37.401724,
         "lng": 122.698982,
+    },
+    {
+        "id": "spot_xm_01",
+        "name": "厦门·白城沙滩",
+        "city": "厦门",
+        "district": "思明区",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "注意涨潮",
+            "远离深水区"
+        ],
+        "observe_hint": "常见生物：沙蟹、寄居蟹、贝类。",
+        "description": "沙滩。紧邻厦门大学，退潮后滩面较宽。导航：厦大白城沙滩。",
+        "gear_list": [
+            "防滑鞋",
+            "防晒用品"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 24.432281,
+        "lng": 118.100875
+    },
+    {
+        "id": "spot_xm_02",
+        "name": "厦门·黄厝海滩",
+        "city": "厦门",
+        "district": "思明区",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "注意涨潮",
+            "远离深水区"
+        ],
+        "observe_hint": "常见生物：沙蟹、寄居蟹、贝类。",
+        "description": "沙滩。环岛路沿线，沙质细，退潮后可在滩面观察。导航：黄厝海滩。",
+        "gear_list": [
+            "防滑鞋",
+            "防晒用品"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 24.442614,
+        "lng": 118.1619
+    },
+    {
+        "id": "spot_xm_03",
+        "name": "厦门·观音山沙滩",
+        "city": "厦门",
+        "district": "思明区",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "注意涨潮",
+            "远离深水区"
+        ],
+        "observe_hint": "常见生物：沙蟹、小海螺、贝类。",
+        "description": "沙滩。环岛东路观音山段，滩面开阔。导航：观音山沙滩。",
+        "gear_list": [
+            "防滑鞋",
+            "防晒用品"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 24.493697,
+        "lng": 118.199506
+    },
+    {
+        "id": "spot_xm_04",
+        "name": "厦门·五缘湾湿地公园",
+        "city": "厦门",
+        "district": "湖里区",
+        "cover_key": "",
+        "open_time": "以公园开放时间为准",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "滩涂陷脚",
+            "注意涨潮"
+        ],
+        "observe_hint": "常见生物：招潮蟹、弹涂鱼、贝类。",
+        "description": "内湾湿地与滩涂。退潮时可见滩涂生物，注意不要进入保护区围栏。导航：五缘湾湿地公园。",
+        "gear_list": [
+            "防滑雨靴"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 24.516071,
+        "lng": 118.178133
+    },
+    {
+        "id": "spot_xm_05",
+        "name": "厦门·杏林湾",
+        "city": "厦门",
+        "district": "集美区",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "滩涂陷脚",
+            "注意涨潮"
+        ],
+        "observe_hint": "常见生物：招潮蟹、弹涂鱼、贝类。",
+        "description": "内湾滩涂。退潮后滩面露出，适合观察招潮蟹和弹涂鱼。导航：杏林湾绿道公园。",
+        "gear_list": [
+            "防滑雨靴"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 24.589993,
+        "lng": 118.067284
+    },
+    {
+        "id": "spot_xm_06",
+        "name": "厦门·大嶝岛",
+        "city": "厦门",
+        "district": "翔安区",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "注意涨潮",
+            "远离深水区"
+        ],
+        "observe_hint": "常见生物：蛤蜊、沙蟹、海蛎子。",
+        "description": "海岛沙滩与滩涂。退潮后滩面较宽，注意避开养殖区。导航：大嶝岛。",
+        "gear_list": [
+            "防滑鞋",
+            "防晒用品"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 24.548894,
+        "lng": 118.342906
+    },
+    {
+        "id": "spot_xm_07",
+        "name": "厦门·小嶝岛",
+        "city": "厦门",
+        "district": "翔安区",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合 8 岁以上，需家长陪同",
+        "safety_tags": [
+            "礁石湿滑",
+            "注意涨潮",
+            "远离浪大区域"
+        ],
+        "observe_hint": "常见生物：海蛎子、藤壶、小螃蟹。",
+        "description": "海岛礁石与沙滩。礁石区湿滑，注意涨潮。导航：小嶝岛。",
+        "gear_list": [
+            "防滑鞋",
+            "手套"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 24.555919,
+        "lng": 118.38697
+    },
+    {
+        "id": "spot_xm_08",
+        "name": "厦门·海沧湾公园",
+        "city": "厦门",
+        "district": "海沧区",
+        "cover_key": "",
+        "open_time": "以公园开放时间为准",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "滩涂陷脚",
+            "注意涨潮"
+        ],
+        "observe_hint": "常见生物：招潮蟹、弹涂鱼、贝类。",
+        "description": "海湾滩涂。退潮后可在滩面观察，注意淤泥。导航：海沧湾公园。",
+        "gear_list": [
+            "防滑雨靴"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 24.48805,
+        "lng": 118.054462
+    },
+    {
+        "id": "spot_xm_09",
+        "name": "厦门·鼓浪屿港仔后沙滩",
+        "city": "厦门",
+        "district": "思明区",
+        "cover_key": "",
+        "open_time": "以轮渡和景区开放时间为准",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "注意涨潮",
+            "远离深水区"
+        ],
+        "observe_hint": "常见生物：寄居蟹、小螃蟹、贝类。",
+        "description": "沙滩。鼓浪屿港仔后海滨，游客较多，退潮后可在沙滩观察。导航：港仔后海滨沙滩。",
+        "gear_list": [
+            "防滑鞋",
+            "防晒用品"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 24.439277,
+        "lng": 118.066849
+    },
+    {
+        "id": "spot_hn_hk_01",
+        "name": "海口·假日海滩",
+        "city": "海口",
+        "district": "秀英区",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "注意涨潮",
+            "远离深水区"
+        ],
+        "observe_hint": "常见生物：沙蟹、寄居蟹、贝类。",
+        "description": "沙滩。海口西海岸，滩面平缓。导航：假日海滩旅游区。",
+        "gear_list": [
+            "防滑鞋",
+            "防晒用品"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 20.036599,
+        "lng": 110.237188
+    },
+    {
+        "id": "spot_hn_hk_02",
+        "name": "海口·西秀海滩",
+        "city": "海口",
+        "district": "秀英区",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "注意涨潮",
+            "远离深水区"
+        ],
+        "observe_hint": "常见生物：沙蟹、贝类。",
+        "description": "沙滩。海口西海岸，适合散步和观察。导航：西秀海滩公园。",
+        "gear_list": [
+            "防滑鞋",
+            "防晒用品"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 20.02537,
+        "lng": 110.260292
+    },
+    {
+        "id": "spot_hn_hk_03",
+        "name": "海口·白沙门沙滩",
+        "city": "海口",
+        "district": "美兰区",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "注意涨潮",
+            "远离深水区"
+        ],
+        "observe_hint": "常见生物：沙蟹、寄居蟹、贝类。",
+        "description": "沙滩。海口海甸岛北侧，退潮后滩面较宽。导航：白沙门沙滩。",
+        "gear_list": [
+            "防滑鞋",
+            "防晒用品"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 20.074992,
+        "lng": 110.333659
+    },
+    {
+        "id": "spot_hn_hk_04",
+        "name": "海口·东寨港红树林",
+        "city": "海口",
+        "district": "美兰区",
+        "cover_key": "",
+        "open_time": "以景区开放时间为准",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "保护区内勿进入",
+            "注意涨潮"
+        ],
+        "observe_hint": "常见生物：招潮蟹、弹涂鱼、螺类（保护区内请勿进入）。",
+        "description": "红树林滩涂。保护区核心区禁止进入，仅在外围开放区域观察。导航：东寨港红树林旅游区。",
+        "gear_list": [
+            "防滑鞋",
+            "望远镜"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 19.950519,
+        "lng": 110.582606
+    },
+    {
+        "id": "spot_hn_wc_01",
+        "name": "文昌·清澜港",
+        "city": "文昌",
+        "district": "文城镇",
+        "cover_key": "",
+        "open_time": "以港区开放情况为准",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "注意船只",
+            "滩涂陷脚",
+            "注意涨潮"
+        ],
+        "observe_hint": "常见生物：螃蟹、贝类。",
+        "description": "渔港与滩涂。退潮时港区滩涂露出，注意船只和湿滑。导航：清澜港。",
+        "gear_list": [
+            "防滑雨靴",
+            "手套"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 19.550841,
+        "lng": 110.833449
+    },
+    {
+        "id": "spot_hn_wc_02",
+        "name": "文昌·铜鼓岭石头公园",
+        "city": "文昌",
+        "district": "龙楼镇",
+        "cover_key": "",
+        "open_time": "以景区开放时间为准",
+        "age_hint": "适合 8 岁以上，需家长陪同",
+        "safety_tags": [
+            "礁石湿滑",
+            "注意涨潮",
+            "远离浪大区域"
+        ],
+        "observe_hint": "常见生物：海螺、藤壶、小螃蟹。",
+        "description": "礁石海岸。火山岩礁石湿滑且浪大，注意安全。导航：石头公园。",
+        "gear_list": [
+            "防滑鞋",
+            "手套"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 19.639504,
+        "lng": 111.035901
+    },
+    {
+        "id": "spot_hn_qh_01",
+        "name": "琼海·博鳌玉带滩",
+        "city": "琼海",
+        "district": "博鳌镇",
+        "cover_key": "",
+        "open_time": "以船班时间为准",
+        "age_hint": "适合 6 岁以上，需家长陪同并穿救生衣",
+        "safety_tags": [
+            "需乘船",
+            "注意船班",
+            "注意涨潮"
+        ],
+        "observe_hint": "常见生物：沙蟹、贝类。",
+        "description": "沙滩。万泉河入海口沙洲，需乘船前往，注意船班和涨潮。导航：博鳌玉带滩。",
+        "gear_list": [
+            "防滑鞋",
+            "救生衣"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 19.106979,
+        "lng": 110.577489
+    },
+    {
+        "id": "spot_hn_wn_01",
+        "name": "万宁·日月湾",
+        "city": "万宁",
+        "district": "日月湾",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "注意浪大",
+            "远离冲浪区",
+            "注意涨潮"
+        ],
+        "observe_hint": "常见生物：沙蟹、寄居蟹、贝类。",
+        "description": "沙滩。冲浪胜地，浪较大，赶海请远离冲浪区和深水区。导航：日月湾。",
+        "gear_list": [
+            "防滑鞋",
+            "防晒用品"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 18.628143,
+        "lng": 110.216248
+    },
+    {
+        "id": "spot_hn_wn_02",
+        "name": "万宁·石梅湾",
+        "city": "万宁",
+        "district": "石梅湾",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "注意涨潮",
+            "远离深水区"
+        ],
+        "observe_hint": "常见生物：沙蟹、贝类。",
+        "description": "沙滩。海湾沙滩，退潮后可在滩面观察。导航：石梅湾。",
+        "gear_list": [
+            "防滑鞋",
+            "防晒用品"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 18.661922,
+        "lng": 110.27209
+    },
+    {
+        "id": "spot_hn_ls_01",
+        "name": "陵水·清水湾",
+        "city": "陵水",
+        "district": "英州镇",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "注意涨潮",
+            "远离深水区"
+        ],
+        "observe_hint": "常见生物：沙蟹、贝类。",
+        "description": "沙滩。陵水清水湾，滩面平缓。导航：清水湾旅游区。",
+        "gear_list": [
+            "防滑鞋",
+            "防晒用品"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 18.394904,
+        "lng": 109.869522
+    },
+    {
+        "id": "spot_hn_sy_01",
+        "name": "三亚·三亚湾",
+        "city": "三亚",
+        "district": "天涯区",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "注意涨潮",
+            "远离深水区"
+        ],
+        "observe_hint": "常见生物：沙蟹、寄居蟹、贝类。",
+        "description": "沙滩。三亚湾椰梦长廊沿线，退潮后滩面较宽。导航：三亚湾。",
+        "gear_list": [
+            "防滑鞋",
+            "防晒用品"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 18.282593,
+        "lng": 109.464218
+    },
+    {
+        "id": "spot_hn_sy_02",
+        "name": "三亚·大东海",
+        "city": "三亚",
+        "district": "吉阳区",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "注意涨潮",
+            "远离深水区"
+        ],
+        "observe_hint": "常见生物：小螃蟹、寄居蟹、贝类。",
+        "description": "沙滩与礁石。游客较多，注意区分游泳区和礁石区。导航：大东海旅游区。",
+        "gear_list": [
+            "防滑鞋",
+            "防晒用品"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 18.22082,
+        "lng": 109.522212
+    },
+    {
+        "id": "spot_hn_sy_03",
+        "name": "三亚·亚龙湾",
+        "city": "三亚",
+        "district": "吉阳区",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "注意涨潮",
+            "远离深水区"
+        ],
+        "observe_hint": "常见生物：沙蟹、贝类。",
+        "description": "沙滩。海湾沙滩，沙质细。导航：亚龙湾海滩。",
+        "gear_list": [
+            "防滑鞋",
+            "防晒用品"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 18.229188,
+        "lng": 109.646004
+    },
+    {
+        "id": "spot_hn_dz_01",
+        "name": "儋州·白马井",
+        "city": "儋州",
+        "district": "白马井镇",
+        "cover_key": "",
+        "open_time": "以港区开放情况为准",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "注意船只",
+            "滩涂陷脚",
+            "注意涨潮"
+        ],
+        "observe_hint": "常见生物：螃蟹、贝类。",
+        "description": "渔港与滩涂。退潮时港区滩涂露出，注意船只。导航：白马井中心渔港码头。",
+        "gear_list": [
+            "防滑雨靴",
+            "手套"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 19.714222,
+        "lng": 109.225146
+    },
+    {
+        "id": "spot_hn_df_01",
+        "name": "东方·鱼鳞洲",
+        "city": "东方",
+        "district": "八所镇",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合 8 岁以上，需家长陪同",
+        "safety_tags": [
+            "礁石湿滑",
+            "注意涨潮",
+            "远离浪大区域"
+        ],
+        "observe_hint": "常见生物：海螺、藤壶、小螃蟹。",
+        "description": "礁石海岸。岩石湿滑，浪大时不要下到礁石区。导航：鱼鳞洲自然风景保护区。",
+        "gear_list": [
+            "防滑鞋",
+            "手套"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 19.097793,
+        "lng": 108.617239
+    },
+    {
+        "id": "spot_hn_cj_01",
+        "name": "昌江·棋子湾",
+        "city": "昌江",
+        "district": "昌化镇",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "礁石湿滑",
+            "注意涨潮",
+            "远离浪大区域"
+        ],
+        "observe_hint": "常见生物：海螺、螃蟹、贝类。",
+        "description": "礁石与沙滩。礁石区湿滑，注意涨潮。导航：棋子湾。",
+        "gear_list": [
+            "防滑鞋",
+            "手套"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 19.372903,
+        "lng": 108.699422
+    },
+    {
+        "id": "spot_hn_cm_01",
+        "name": "澄迈·盈滨半岛",
+        "city": "澄迈",
+        "district": "老城镇",
+        "cover_key": "",
+        "open_time": "全天开放",
+        "age_hint": "适合全年龄，未成年人需家长陪同",
+        "safety_tags": [
+            "注意涨潮",
+            "远离深水区"
+        ],
+        "observe_hint": "常见生物：沙蟹、贝类。",
+        "description": "沙滩。澄迈盈滨半岛，滩面平缓。导航：盈滨半岛旅游区。",
+        "gear_list": [
+            "防滑鞋",
+            "防晒用品"
+        ],
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-10-30",
+        "lat": 19.980712,
+        "lng": 110.110492
+    },
+    {
+        "id": 'spot_hn_ls_02',
+        "name": '陵水·黎安哪吒亲子户外俱乐部',
+        "city": '陵水',
+        "district": '黎安镇',
+        "cover_key": '',
+        "open_time": '全天开放（退潮时段最佳）',
+        "age_hint": '适合全年龄，未成年人需家长陪同',
+        "safety_tags": ['注意涨潮', '远离深水区', '穿防滑鞋'],
+        "observe_hint": '常见生物：寄居蟹、螃蟹、弹涂鱼、海星、海胆、蛤蜊。',
+        "description": '泥沙混合滩。导航至陵水黎安哪吒亲子户外俱乐部。',
+        "gear_list": ['防滑鞋', '小水桶', '观察盒'],
+        "source": '海南陵水赶海点位表',
+        "reviewed_at": '2026-10-30',
+        "lat": 18.433956,
+        "lng": 110.046908,
+    },
+    {
+        "id": 'spot_hn_ls_03',
+        "name": '陵水·海龟沙滩',
+        "city": '陵水',
+        "district": '黎安镇',
+        "cover_key": '',
+        "open_time": '全天开放（退潮时段最佳）',
+        "age_hint": '适合全年龄，未成年人需家长陪同',
+        "safety_tags": ['注意涨潮', '远离深水区', '穿防滑鞋'],
+        "observe_hint": '常见生物：寄居蟹、螃蟹、弹涂鱼、海星、海胆、蛤蜊。',
+        "description": '泥沙混合滩。导航至海龟沙滩，向南部步行可达，附近为海南生态海岸。',
+        "gear_list": ['防滑鞋', '小水桶', '观察盒'],
+        "source": '海南陵水赶海点位表',
+        "reviewed_at": '2026-10-30',
+        "lat": 18.443859,
+        "lng": 110.053564,
+    },
+    {
+        "id": 'spot_hn_ls_04',
+        "name": '陵水·岭仔村',
+        "city": '陵水',
+        "district": '黎安镇',
+        "cover_key": '',
+        "open_time": '全天开放（退潮时段最佳）',
+        "age_hint": '适合全年龄，未成年人需家长陪同',
+        "safety_tags": ['注意涨潮', '远离深水区'],
+        "observe_hint": '常见生物：贝壳、海星、小鱼、螃蟹。',
+        "description": '沙滩。导航至岭仔村赶海点或岭仔村赶海小火锅。',
+        "gear_list": ['防滑鞋', '防晒用品'],
+        "source": '海南陵水赶海点位表',
+        "reviewed_at": '2026-10-30',
+        "lat": 18.419881,
+        "lng": 110.04835,
+    },
+    {
+        "id": 'spot_hn_ls_05',
+        "name": '陵水·赤岭',
+        "city": '陵水',
+        "district": '英州镇',
+        "cover_key": '',
+        "open_time": '全天开放（退潮时段最佳）',
+        "age_hint": '适合 6 岁以上，礁石湿滑需大人牵手',
+        "safety_tags": ['礁石湿滑', '远离涨潮线', '穿防滑鞋'],
+        "observe_hint": '常见生物：海胆、小螃蟹、蛤蜊、海螺、海星。',
+        "description": '礁石滩。导航至中国石化赤岭加油站（英州镇赤岭村望海路2号）。',
+        "gear_list": ['防滑鞋', '观察盒'],
+        "source": '海南陵水赶海点位表',
+        "reviewed_at": '2026-10-30',
+        "lat": 18.383698,
+        "lng": 109.82251,
+    },
+    {
+        "id": 'spot_hn_ls_06',
+        "name": '陵水·桐海村',
+        "city": '陵水',
+        "district": '新村镇',
+        "cover_key": '',
+        "open_time": '全天开放（退潮时段最佳）',
+        "age_hint": '适合全年龄，未成年人需家长陪同',
+        "safety_tags": ['注意涨潮', '远离深水区', '穿防滑鞋'],
+        "observe_hint": '常见生物：螃蟹、海星、花甲、蛤蜊、青口、生蚝、海螺。',
+        "description": '泥沙混合滩。导航至桐海小学（新村镇桐海村）。',
+        "gear_list": ['防滑鞋', '小水桶', '观察盒'],
+        "source": '海南陵水赶海点位表',
+        "reviewed_at": '2026-10-30',
+        "lat": 18.433498,
+        "lng": 110.008927,
+    },
+    {
+        "id": 'spot_hn_ls_07',
+        "name": '陵水·新村港东侧滩涂',
+        "city": '陵水',
+        "district": '新村镇',
+        "cover_key": '',
+        "open_time": '全天开放（退潮时段最佳）',
+        "age_hint": '适合全年龄，未成年人需家长陪同',
+        "safety_tags": ['注意涨潮', '远离深水区', '穿防滑鞋'],
+        "observe_hint": '常见生物：海星、海胆、螃蟹。',
+        "description": '泥沙混合滩。位于海南陵水黎安国际教育创新试验区新视听艺术博物馆西北侧沙滩区域。',
+        "gear_list": ['防滑鞋', '小水桶', '观察盒'],
+        "source": '海南陵水赶海点位表',
+        "reviewed_at": '2026-10-30',
+        "lat": 18.401563,
+        "lng": 110.01821,
+    },
+    {
+        "id": 'spot_hn_ls_08',
+        "name": '陵水·黎安港西北角',
+        "city": '陵水',
+        "district": '光坡镇',
+        "cover_key": '',
+        "open_time": '全天开放（退潮时段最佳）',
+        "age_hint": '适合全年龄，未成年人需家长陪同',
+        "safety_tags": ['注意涨潮', '远离深水区', '穿防滑鞋'],
+        "observe_hint": '常见生物：招潮蟹、青蟹、蛏子、蛤蜊。',
+        "description": '泥沙混合滩。导航至富力湾堤坝，后步行至堤坝东南方向滩涂区域。',
+        "gear_list": ['防滑鞋', '小水桶', '观察盒'],
+        "source": '海南陵水赶海点位表',
+        "reviewed_at": '2026-10-30',
+        "lat": 18.516925,
+        "lng": 110.099565,
     },
 ]
 
@@ -1404,6 +2140,231 @@ SPECIES = [
         "reviewed_at": "2026-08-28",
         "protected": False,
     },
+    {
+        "id": "sp_tide",
+        "name": "潮汐",
+        "aka": ["海潮", "涨落潮"],
+        "category": "physical",
+        "cover_key": "",
+        "summary": "海水在月球和太阳引力下周期性涨落，是最容易在海边观察到的海洋现象。",
+        "look": "多数海岸一天有两次涨落；朔望时潮差最大（大潮），上下弦时潮差最小（小潮）。",
+        "habitat": "全球海岸；海湾、河口和狭窄地形会放大或削弱潮差。",
+        "observe_tip": "连续几天记录同一块礁石被淹没的时间，会发现涨潮每天大约推迟 50 分钟。",
+        "safety_tip": "赶海前先看当天潮汐表，涨潮前及时离开滩涂和礁石。",
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-11-11",
+        "protected": False,
+    },
+    {
+        "id": "sp_ocean_current",
+        "name": "洋流",
+        "aka": ["海流", "大洋洋流"],
+        "category": "physical",
+        "cover_key": "",
+        "summary": "海水在全球尺度上沿着相对固定的路径流动，像海洋里的河流。",
+        "look": "主要由风、海水密度差和地球自转共同驱动；表层流和深层流方向常常不同。",
+        "habitat": "各大洋；暖流把热量从低纬带向高纬，寒流则相反。",
+        "observe_tip": "观察漂流物、海雾和沿岸水温变化，能间接感受到洋流的影响。",
+        "safety_tip": "离岸流很危险，游泳时不要逆流硬游，应向两侧脱离。",
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-11-11",
+        "protected": False,
+    },
+    {
+        "id": "sp_wave",
+        "name": "海浪",
+        "aka": ["波浪", "涌浪"],
+        "category": "physical",
+        "cover_key": "",
+        "summary": "风把能量传给海面形成波浪，波浪可以跨越很远的距离传播。",
+        "look": "风浪受当地风影响，涌浪则来自远处的风暴；接近浅水时波高增大并破碎。",
+        "habitat": "所有海面；礁石岸、沙滩和防波堤会以不同方式消耗波浪能量。",
+        "observe_tip": "看浪花破碎的位置和周期，能判断海底地形和当天海况。",
+        "safety_tip": "台风或大风后不要靠近礁石边缘，疯狗浪可能突然打上来。",
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-11-11",
+        "protected": False,
+    },
+    {
+        "id": "sp_thermocline",
+        "name": "温跃层",
+        "aka": ["温度跃层"],
+        "category": "physical",
+        "cover_key": "",
+        "summary": "海水温度在某一深度突然快速下降的水层，像海洋里的一层隐形隔板。",
+        "look": "上层温暖、下层寒冷，中间几十米内温度骤变；季节和纬度会改变它的深度。",
+        "habitat": "中低纬度外海、深水湖和部分海湾；浅水潮间带通常不明显。",
+        "observe_tip": "潜水或看海洋调查数据时，温跃层附近常能看到鱼群和营养盐的集中变化。",
+        "safety_tip": "温跃层会干扰声呐和潜水员的判断，水下活动要听从专业人员安排。",
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-11-11",
+        "protected": False,
+    },
+    {
+        "id": "sp_salinity",
+        "name": "海水盐度",
+        "aka": ["盐度", "海水含盐量"],
+        "category": "physical",
+        "cover_key": "",
+        "summary": "一公斤海水里溶解的盐类总量，决定海水的密度、浮力和结冰温度。",
+        "look": "外海通常在 3.5% 左右；蒸发强、降水少的海域更高，河口和近岸会明显变淡。",
+        "habitat": "全球海洋；河口、潟湖和封闭海湾的盐度变化最大。",
+        "observe_tip": "盐度是海水的基本物理性质；观察时不要直接用嘴尝海水。",
+        "safety_tip": "盐度骤变会影响海洋生物，参观养殖区时不要随意投喂或放生。",
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-11-11",
+        "protected": False,
+    },
+    {
+        "id": "sp_argo_float",
+        "name": "Argo 浮标",
+        "aka": ["剖面浮标", "Argo"],
+        "category": "tech",
+        "cover_key": "",
+        "summary": "自动在海里上浮下沉、测量温度和盐度的漂流浮标，是全球海洋观测的主力。",
+        "look": "约一人高的圆柱体，靠改变浮力下潜到约 2000 米，再上浮把数据传回卫星。",
+        "habitat": "全球大洋；数千个浮标组成 Argo 阵列，常年无人值守。",
+        "observe_tip": "Argo 数据公开可查，可以看看你关注的海域最近一次剖面是什么时候。",
+        "safety_tip": "海上遇到浮标不要拖拽或拆解，它们承担着长期观测任务。",
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-11-11",
+        "protected": False,
+    },
+    {
+        "id": "sp_rov",
+        "name": "水下机器人",
+        "aka": ["ROV", "遥控潜水器"],
+        "category": "tech",
+        "cover_key": "",
+        "summary": "通过缆线由母船遥控的水下机器人，能替人进入深海完成观察和取样。",
+        "look": "方形框架、推进器、摄像机和机械臂；缆线同时传输电力、视频和控制信号。",
+        "habitat": "深海热液、沉船、海底管线和水下工程现场。",
+        "observe_tip": "看科考直播时留意机械臂如何取样，以及灯光在深水里能照多远。",
+        "safety_tip": "ROV 作业水域会设警戒，船只和潜水员不要靠近缆线和推进器。",
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-11-11",
+        "protected": False,
+    },
+    {
+        "id": "sp_multibeam_sonar",
+        "name": "多波束声呐",
+        "aka": ["多波束测深", "海底测绘"],
+        "category": "tech",
+        "cover_key": "",
+        "summary": "向海底发射一片扇形声波，同时测出许多点的深度，用来绘制海底地形图。",
+        "look": "船底换能器发射声波，回收时间换算成深度；多个波束拼成一条宽幅测带。",
+        "habitat": "科考船、测量船和港口航道；从浅海大陆架到深海海沟都能用。",
+        "observe_tip": "海图上的等深线和海底山脊，很多就是多波束测出来的。",
+        "safety_tip": "声呐对海洋哺乳动物有影响，调查船会按规定避开繁殖和迁徙区域。",
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-11-11",
+        "protected": False,
+    },
+    {
+        "id": "sp_ocean_satellite",
+        "name": "海洋卫星",
+        "aka": ["海洋遥感卫星"],
+        "category": "tech",
+        "cover_key": "",
+        "summary": "从太空监测海面高度、风场、温度和颜色的卫星，让人类每天看到整片海洋。",
+        "look": "不同传感器分工：高度计测海平面，散射计测风，水色仪测浮游植物。",
+        "habitat": "近地轨道；一颗卫星每天可覆盖全球大部分海域。",
+        "observe_tip": "台风路径、赤潮和海水温度图背后，很多数据都来自海洋卫星。",
+        "safety_tip": "卫星数据是预报工具，不能替代现场潮汐表和海事部门的安全通知。",
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-11-11",
+        "protected": False,
+    },
+    {
+        "id": "sp_artificial_reef",
+        "name": "人工鱼礁",
+        "aka": ["鱼礁", "海洋牧场"],
+        "category": "tech",
+        "cover_key": "",
+        "summary": "把设计过的礁体投放到海底，为鱼类和附着生物提供躲避、附着和觅食的空间。",
+        "look": "混凝土、石块或钢架结构，表面会逐渐长满藻类、藤壶和珊瑚。",
+        "habitat": "近岸浅海、退化礁区、海洋牧场和增殖放流海域。",
+        "observe_tip": "观察鱼礁区时，别只数大鱼，也看看礁体表面附着了哪些小生物。",
+        "safety_tip": "鱼礁区可能有渔网和锚链，潜水、垂钓前先了解当地管理规定。",
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-11-11",
+        "protected": False,
+    },
+    {
+        "id": "sp_whale",
+        "name": "鲸",
+        "aka": ["鲸鱼", "海兽"],
+        "category": "other_marine",
+        "cover_key": "",
+        "summary": "生活在海洋里的哺乳动物，用肺呼吸，靠声音交流和导航。",
+        "look": "须鲸用鲸须滤食小鱼小虾，齿鲸用牙齿捕食；头顶有呼吸孔，尾鳍水平摆动。",
+        "habitat": "从近岸到开阔大洋；很多种类会进行长距离季节性迁徙。",
+        "observe_tip": "观鲸要保持距离，看到喷潮、尾鳍或跃身时不要追船。",
+        "safety_tip": "鲸是受保护动物，禁止靠近、投喂、触摸和追逐。",
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-11-11",
+        "protected": True,
+    },
+    {
+        "id": "sp_sea_turtle",
+        "name": "海龟",
+        "aka": ["绿海龟", "海龟"],
+        "category": "other_marine",
+        "cover_key": "",
+        "summary": "一生大部分时间在海里生活的爬行动物，要回到沙滩上产卵。",
+        "look": "流线型背甲、桨状四肢，不能把头缩进壳里；不同种类背甲花纹不同。",
+        "habitat": "热带和亚热带海域、海草床、珊瑚礁和沙滩。",
+        "observe_tip": "夜间看海龟上岸产卵要保持安静和距离，不能打灯直照。",
+        "safety_tip": "海龟受保护，禁止触摸、骑乘、投喂和采集龟卵。",
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-11-11",
+        "protected": True,
+    },
+    {
+        "id": "sp_seabird",
+        "name": "海鸟",
+        "aka": ["海鸥", "鸻鹬"],
+        "category": "other_marine",
+        "cover_key": "",
+        "summary": "长期在海岸和海上活动的鸟类，能用盐腺排出喝进去的多余盐分。",
+        "look": "有蹼或长腿，羽毛防水；不同种类分别在崖壁、沙滩或岛上筑巢。",
+        "habitat": "海岸、海岛、礁石和开阔海面；迁徙季节会经过很长的海岸线。",
+        "observe_tip": "繁殖季不要靠近巢区，亲鸟受惊弃巢会让蛋和雏鸟暴露在烈日下。",
+        "safety_tip": "不要投喂海鸥，人类食物会改变它们的觅食习惯并带来疾病风险。",
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-11-11",
+        "protected": False,
+    },
+    {
+        "id": "sp_hydrothermal_vent",
+        "name": "深海热液",
+        "aka": ["热液喷口", "黑烟囱"],
+        "category": "other_marine",
+        "cover_key": "",
+        "summary": "海底裂缝喷出高温富含矿物的热水，周围生活着不靠阳光的独特生态系统。",
+        "look": "喷口附近常见黑烟囱和白色菌席；管虫、盲虾、贻贝成片聚集。",
+        "habitat": "板块活动活跃的深海海底，通常在水深数百到数千米。",
+        "observe_tip": "热液生态靠化能合成而不是光合作用，是寻找地外生命的重要参考。",
+        "safety_tip": "热液区水温极高，只有专业深潜器才能靠近，普通人不要尝试。",
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-11-11",
+        "protected": False,
+    },
+    {
+        "id": "sp_plankton",
+        "name": "浮游生物",
+        "aka": ["浮游植物", "浮游动物"],
+        "category": "other_marine",
+        "cover_key": "",
+        "summary": "随水流漂动的微小生物，是海洋食物网的基础，也贡献了大量氧气。",
+        "look": "浮游植物多为单细胞藻类，浮游动物包括桡足类、水母幼体等；多数肉眼难辨。",
+        "habitat": "从海面到深海都有；营养盐和光照决定浮游植物的分布。",
+        "observe_tip": "夜晚海面的荧光很多来自甲藻等浮游生物，用手电照一照能看到。",
+        "safety_tip": "有些浮游藻类会形成赤潮，贝类毒素风险高时不要采食。",
+        "source": "追潮记团队整理",
+        "reviewed_at": "2026-11-11",
+        "protected": False,
+    },
 ]
 
 # 官方图鉴封面图对象 key（对应 data/uploads/pictorial/ 下的文件）
@@ -1412,7 +2373,7 @@ SPECIES_COVERS = {
     "sp_oyster": "pictorial/sp_oyster.jpg",
     "sp_limpet": "pictorial/sp_limpet.jpg",
     "sp_sea_lettuce": "pictorial/sp_sea_lettuce.jpg",
-    "sp_hermit_crab": "pictorial/sp_hermit_crab.gif",
+    "sp_hermit_crab": "pictorial/sp_hermit_crab.jpg",
     "sp_sea_anemone": "pictorial/sp_sea_anemone.jpg",
     "sp_starfish": "pictorial/sp_starfish.jpg",
     "sp_mussel": "pictorial/sp_mussel.jpg",
@@ -1569,6 +2530,10 @@ QUIZ_QUESTIONS = [
 
 _STATIC_BASE = "https://www.blueakaiwu.cn/api/v1/static/assets"
 
+# 勋章图的版本号：静态资源带 `Cache-Control: max-age=86400`，客户端按 URL 缓存 24 小时。
+# **换图之后必须把这个版本号 +1**，否则老用户 24 小时内还会看到旧图。
+_MEDAL_IMG_V = "?v=2"
+
 # 首页活动轮播（图片走静态资源同域，返回完整 URL）
 # layout：card = 左侧文字 + 右侧小插图；banner = 整幅宽图铺满卡片
 ACTIVITIES = [
@@ -1668,110 +2633,87 @@ LIGHT_MAPS = [
 ]
 
 MEDALS = [
-    {
-        "id": "medal_1", "title": "初次见面", "display_title": "初来乍到", "rarity": "common",
-        "icon_key": "", "description": "第一次生成属于你的图鉴卡。",
-        "requirements": [{"text": "生成第一张图鉴卡"}], "rewards": {"score": 20}, "sort": 1,
-    },
-    {
-        "id": "medal_2", "title": "探索新星", "display_title": "探索新星", "rarity": "rare",
-        "icon_key": "", "description": "在 3 个不同点位完成打卡。",
-        "requirements": [{"text": "打卡 3 个不同点位"}], "rewards": {"score": 50}, "sort": 2,
-    },
-    {
-        "id": "medal_3", "title": "无畏冒险家", "display_title": "无畏冒险家", "rarity": "epic",
-        "icon_key": "", "description": "完成「安全观察」闯关并全部答对。",
-        "requirements": [{"text": "通过安全观察闯关"}], "rewards": {"score": 100}, "sort": 3,
-    },
-    {
-        "id": "medal_4", "title": "宝藏猎人", "display_title": "宝藏猎人", "rarity": "rare",
-        "icon_key": "", "description": "累计收集 5 张图鉴卡。",
-        "requirements": [{"text": "收集 5 张图鉴卡"}], "rewards": {"score": 80}, "sort": 4,
-    },
-    {
-        "id": "medal_5", "title": "解谜达人", "display_title": "解谜达人", "rarity": "epic",
-        "icon_key": "", "description": "对照图鉴完成 3 次正确猜测。",
-        "requirements": [{"text": "完成 3 次正确猜测"}], "rewards": {"score": 120}, "sort": 5,
-    },
     # ===== 众筹成就（设计同学交来的 13 个）=====
     # icon_key = 完整 URL（客户端把它当完整地址用）。这里先用现成的 badge 图占位，
     # 后续换成正式图案时只改这一行即可；_seed_missing 只插不改，所以要改已入库的
     # 成就得另外写一次同步（或手工改库）。
     {
         "id": "medal_6", "title": "蓝色青年行动", "display_title": "蓝色青年行动", "rarity": "common",
-        "icon_key": f"{_STATIC_BASE}/badges/crab-heart.png",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-heart.png{_MEDAL_IMG_V}",
         "description": "活动期间登录追潮记即可获得。",
         "requirements": [{"text": "10.7-10.17 期间登录"}], "rewards": {"score": 30}, "sort": 6,
     },
     {
         "id": "medal_7", "title": "深蓝百万里", "display_title": "深蓝百万里", "rarity": "common",
-        "icon_key": f"{_STATIC_BASE}/badges/crab-map.png",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-map.png{_MEDAL_IMG_V}",
         "description": "点进「深蓝百万里」看一看。",
         "requirements": [{"text": "进入「深蓝百万里」"}], "rewards": {"score": 30}, "sort": 7,
     },
     {
         "id": "medal_8", "title": "……好吧也比没有强", "display_title": "……好吧也比没有强", "rarity": "common",
-        "icon_key": f"{_STATIC_BASE}/badges/crab-dig.png",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-dig.png{_MEDAL_IMG_V}",
         "description": "捡到一块石头也算收获。",
         "requirements": [{"text": "识别到一块石头"}], "rewards": {"score": 30}, "sort": 8,
     },
     {
         "id": "medal_9", "title": "蟹蟹！", "display_title": "蟹蟹！", "rarity": "common",
-        "icon_key": f"{_STATIC_BASE}/badges/crab-cloud.png",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-cloud.png{_MEDAL_IMG_V}",
         "description": "第一次识别到螃蟹。",
         "requirements": [{"text": "识别到螃蟹"}], "rewards": {"score": 40}, "sort": 9,
     },
     {
         "id": "medal_10", "title": "蟹老板", "display_title": "蟹老板", "rarity": "rare",
-        "icon_key": f"{_STATIC_BASE}/badges/crab-crown.png",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-crown.png{_MEDAL_IMG_V}",
         "description": "识别到很多只螃蟹，蟹老板本蟹。",
         "requirements": [{"text": "累计识别 10 次螃蟹"}], "rewards": {"score": 80}, "sort": 10,
     },
     {
         "id": "medal_11", "title": "海景房", "display_title": "“海景房”", "rarity": "epic",
-        "icon_key": f"{_STATIC_BASE}/badges/crab-star.png",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-star.png{_MEDAL_IMG_V}",
         "description": "一次拍照就认出三种及以上潮间带生物。",
         "requirements": [{"text": "单次识别出 3 种以上生物"}], "rewards": {"score": 120}, "sort": 11,
     },
     {
         "id": "medal_12", "title": "海星拾趣", "display_title": "海星拾趣", "rarity": "rare",
-        "icon_key": f"{_STATIC_BASE}/badges/crab-heart.png",
+        # 原本和 medal_6 共用 crab-heart.png；正式图案是一枚一张，这里换成独立文件
+        "icon_key": f"{_STATIC_BASE}/badges/medal_12.png{_MEDAL_IMG_V}",
         "description": "拍照识别到海星。",
         "requirements": [{"text": "识别到海星"}], "rewards": {"score": 60}, "sort": 12,
     },
     {
         "id": "medal_13", "title": "海洋记录员", "display_title": "这就是…海洋记录员？", "rarity": "epic",
-        "icon_key": f"{_STATIC_BASE}/badges/crab-book.png",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-book.png{_MEDAL_IMG_V}",
         "description": "累计识别出足够多种不同的生物。",
         "requirements": [{"text": "累计识别 10 种不同生物"}], "rewards": {"score": 150}, "sort": 13,
     },
     {
         "id": "medal_14", "title": "深蓝小卫士", "display_title": "深蓝小卫士", "rarity": "rare",
-        "icon_key": f"{_STATIC_BASE}/badges/crab-helmet.png",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-helmet.png{_MEDAL_IMG_V}",
         "description": "用垃圾识别认出海边的垃圾。",
         "requirements": [{"text": "拍照识别出海洋垃圾"}], "rewards": {"score": 80}, "sort": 14,
     },
     {
         "id": "medal_15", "title": "海的味道我知道", "display_title": "海的味道我知道！", "rarity": "rare",
-        "icon_key": f"{_STATIC_BASE}/badges/crab-checklist.png",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-checklist.png{_MEDAL_IMG_V}",
         "description": "拍照识别到紫菜。",
         "requirements": [{"text": "识别到紫菜"}], "rewards": {"score": 60}, "sort": 15,
     },
     {
         "id": "medal_16", "title": "siuuuuuu", "display_title": "siuuuuuu～～～", "rarity": "epic",
-        "icon_key": f"{_STATIC_BASE}/badges/crab-astronaut.png",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-astronaut.png{_MEDAL_IMG_V}",
         "description": "把图鉴里所有以「螺」结尾的生物都集齐。",
         "requirements": [{"text": "集齐图鉴中所有「螺」类生物"}], "rewards": {"score": 150}, "sort": 16,
     },
     {
         "id": "medal_17", "title": "洞口常含盐巴", "display_title": "为什么我的洞口常含盐巴", "rarity": "rare",
-        "icon_key": f"{_STATIC_BASE}/badges/crab-dig.png",
+        # 原本和 medal_8 共用 crab-dig.png；正式图案是一枚一张，这里换成独立文件
+        "icon_key": f"{_STATIC_BASE}/badges/medal_17.png{_MEDAL_IMG_V}",
         "description": "抓到蛏子并拍照识别。",
         "requirements": [{"text": "识别到蛏子"}], "rewards": {"score": 60}, "sort": 17,
     },
     {
         "id": "medal_18", "title": "拍我干什么", "display_title": "拍我干什么？", "rarity": "rare",
-        "icon_key": f"{_STATIC_BASE}/badges/crab-search.png",
+        "icon_key": f"{_STATIC_BASE}/badges/crab-search.png{_MEDAL_IMG_V}",
         "description": "拍照识别到藤壶。",
         "requirements": [{"text": "识别到藤壶"}], "rewards": {"score": 60}, "sort": 18,
     },
@@ -1817,6 +2759,38 @@ async def _remove_deprecated_spots(session: AsyncSession) -> None:
     await session.execute(
         delete(SpotHarmonics).where(SpotHarmonics.spot_id.in_(DEPRECATED_SPOTS))
     )
+
+
+async def _remove_deprecated_medals(session: AsyncSession) -> None:
+    """删除已废弃的勋章，**并把受影响用户的积分重算**（幂等）。
+
+    为什么必须重算：`users.score` = 已解锁勋章 rewards.score 的累计，而
+    `/achievements/overview` 的完成度就是 score / 剩余勋章总分。勋章删了但分留着的话，
+    完成度会算到 100% 以上、等级（xp = score + 去过的点位 × 60）也跟着虚高。
+    等级本身不用动 —— 它会在下次读 /auth/me 时按新分数自动重算。
+    """
+    if not DEPRECATED_MEDALS:
+        return
+    affected = (
+        await session.execute(
+            select(UserMedal.user_id).where(UserMedal.medal_id.in_(DEPRECATED_MEDALS)).distinct()
+        )
+    ).scalars().all()
+    await session.execute(delete(UserMedal).where(UserMedal.medal_id.in_(DEPRECATED_MEDALS)))
+    await session.execute(delete(Medal).where(Medal.id.in_(DEPRECATED_MEDALS)))
+    for uid in affected:
+        left_ids = (
+            await session.execute(select(UserMedal.medal_id).where(UserMedal.user_id == uid))
+        ).scalars().all()
+        total = 0
+        if left_ids:
+            left = (
+                await session.execute(select(Medal).where(Medal.id.in_(left_ids)))
+            ).scalars().all()
+            total = sum(int((m.rewards or {}).get("score") or 0) for m in left)
+        user = await session.get(User, uid)
+        if user is not None:
+            user.score = total
 
 
 async def _sync_team_source(session: AsyncSession) -> None:
@@ -1880,6 +2854,39 @@ SPOT_HEAT = {
     "spot_qd_40": 40,  # 于家沟  其他（平列）
     "spot_qd_41": 40,  # 羊羔涧  其他（平列）
     "spot_wh_chengshantou": 75,  # 威海·成山头
+    "spot_xm_01": 85,  # 厦门·白城沙滩
+    "spot_xm_02": 85,  # 厦门·黄厝海滩
+    "spot_xm_03": 70,  # 厦门·观音山沙滩
+    "spot_xm_04": 70,  # 厦门·五缘湾湿地公园
+    "spot_xm_05": 55,  # 厦门·杏林湾
+    "spot_xm_06": 70,  # 厦门·大嶝岛
+    "spot_xm_07": 55,  # 厦门·小嶝岛
+    "spot_xm_08": 55,  # 厦门·海沧湾公园
+    "spot_xm_09": 85,  # 厦门·鼓浪屿港仔后沙滩
+    "spot_hn_hk_01": 85,  # 海口·假日海滩
+    "spot_hn_hk_02": 70,  # 海口·西秀海滩
+    "spot_hn_hk_03": 70,  # 海口·白沙门沙滩
+    "spot_hn_hk_04": 55,  # 海口·东寨港红树林
+    "spot_hn_wc_01": 70,  # 文昌·清澜港
+    "spot_hn_wc_02": 85,  # 文昌·铜鼓岭石头公园
+    "spot_hn_qh_01": 85,  # 琼海·博鳌玉带滩
+    "spot_hn_wn_01": 85,  # 万宁·日月湾
+    "spot_hn_wn_02": 70,  # 万宁·石梅湾
+    "spot_hn_ls_01": 70,  # 陵水·清水湾
+    "spot_hn_ls_02": 70,  # 陵水·黎安哪吒亲子户外俱乐部
+    "spot_hn_ls_03": 70,  # 陵水·海龟沙滩
+    "spot_hn_ls_04": 55,  # 陵水·岭仔村
+    "spot_hn_ls_05": 55,  # 陵水·赤岭
+    "spot_hn_ls_06": 55,  # 陵水·桐海村
+    "spot_hn_ls_07": 70,  # 陵水·新村港东侧滩涂
+    "spot_hn_ls_08": 55,  # 陵水·黎安港西北角
+    "spot_hn_sy_01": 100,  # 三亚·三亚湾
+    "spot_hn_sy_02": 100,  # 三亚·大东海
+    "spot_hn_sy_03": 85,  # 三亚·亚龙湾
+    "spot_hn_dz_01": 55,  # 儋州·白马井
+    "spot_hn_df_01": 70,  # 东方·鱼鳞洲
+    "spot_hn_cj_01": 70,  # 昌江·棋子湾
+    "spot_hn_cm_01": 55,  # 澄迈·盈滨半岛
 }
 
 
@@ -1936,6 +2943,7 @@ async def seed_if_empty(session: AsyncSession) -> None:
     await _seed_missing(session, QuizQuestion, QUIZ_QUESTIONS)
     await _seed_missing(session, Medal, MEDALS)
     await _sync_medal_fields(session)
+    await _remove_deprecated_medals(session)
     await _seed_missing(session, CommunityTopic, COMMUNITY_TOPICS)
     await _seed_missing(session, Knowledge, KNOWLEDGE)
     await _seed_missing(session, LightMap, LIGHT_MAPS)

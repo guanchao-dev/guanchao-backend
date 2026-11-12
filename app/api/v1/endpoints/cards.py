@@ -1,5 +1,6 @@
 """观潮记录与图鉴卡：生成 / 列表 / 详情 / 收藏 / 删除 / 分享。"""
 import asyncio
+import io
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
@@ -7,6 +8,7 @@ from fastapi.responses import Response
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.endpoints.uploads import as_cos_redirect
 from app.core.deps import ensure_consent, get_current_user
 from app.core.exceptions import ForbiddenError, NotFoundError
 from app.core.response import ok, paginated
@@ -77,6 +79,25 @@ def _image_media_type(object_key: str) -> str:
     return "image/png"
 
 
+def _to_jpeg(data: bytes, quality: int = 85) -> bytes:
+    """把模型给的图压成 JPEG。失败就原样返回，别让整条链路挂掉。
+
+    文生图模型吐的是 1024×1024 的 PNG，实测 430~830KB；小程序端要下将近 1MB，
+    加载很慢。同一个内容转 JPEG q85 只要 80KB 左右，肉眼没有区别。
+    """
+    try:
+        from PIL import Image
+
+        im = Image.open(io.BytesIO(data))
+        if im.mode != "RGB":
+            im = im.convert("RGB")
+        out = io.BytesIO()
+        im.save(out, "JPEG", quality=quality, optimize=True)
+        return out.getvalue()
+    except Exception:
+        return data
+
+
 async def _generate_cover_background(user_id: str, card_id: str, upload_object_key: str) -> None:
     """后台把用户照片转成卡通插画并回写卡片（不阻塞接口响应），失败则保留原照片。"""
     try:
@@ -84,8 +105,9 @@ async def _generate_cover_background(user_id: str, card_id: str, upload_object_k
         image_bytes = await generate_card_cover(original)
         if not image_bytes:
             return
-        object_key = f"private/{user_id}/card/{card_id}_ai.png"
-        await storage.save_bytes(object_key, image_bytes)
+        # 存盘前压一道（详见 _to_jpeg）。扩展名跟着变成 .jpg，媒体类型才对得上。
+        object_key = f"private/{user_id}/card/{card_id}_ai.jpg"
+        await storage.save_bytes(object_key, _to_jpeg(image_bytes))
         async with async_session_factory() as session:
             card = await session.get(Card, card_id)
             if card is not None:
@@ -96,7 +118,9 @@ async def _generate_cover_background(user_id: str, card_id: str, upload_object_k
 
 
 def _ai_image_ready(card: Card) -> bool:
-    return bool(card.cover_key) and card.cover_key.endswith("_ai.png")
+    """AI 封面生成好了没。历史文件是 `_ai.png`（没压过），新的压过、是 `_ai.jpg`。"""
+    key = card.cover_key or ""
+    return key.endswith("_ai.png") or key.endswith("_ai.jpg")
 
 
 def _card_full(card: Card, spot_name: str, favorited: bool) -> dict:
@@ -238,10 +262,13 @@ async def card_detail(
 
 @router.get("/cards/{card_id}/image")
 async def card_image(card_id: str, db: AsyncSession = Depends(get_db)):
-    """返回图鉴卡封面图（与 /uploads/{id}/content 一致，本地直读）。"""
+    """返回图鉴卡封面图。COS 开着就直接 302 跳直链（见 uploads.py::as_cos_redirect）。"""
     card = await db.get(Card, card_id)
     if card is None or not card.cover_key:
         raise NotFoundError("图鉴卡图片不存在")
+    redirect = await as_cos_redirect(card.cover_key)
+    if redirect is not None:
+        return redirect
     try:
         data = await storage.read_bytes(card.cover_key)
     except FileNotFoundError:

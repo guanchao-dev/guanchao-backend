@@ -1,7 +1,6 @@
 """通义千问（DashScope）客户端 + AI 能力实现。
 
-- 文本生成用 `qwen_text_model`（默认 qwen-plus），视觉理解用 `qwen_vl_model`（默认 qwen3.7-plus）。
-  qwen-vl-max / qwen-vl-plus 已于 2026-10-10 随百炼大规模下线，视觉能力并入 Qwen3.7/3.8 通用模型。
+- 文本生成用 `qwen_text_model`（默认 qwen-plus），视觉理解用 `qwen_vl_model`（默认 qwen-vl-max）。
 - 走 OpenAI 兼容模式（dashscope_base_url）。
 - 潮汐建议 / 图鉴卡失败时优雅降级为规则模板；物种猜测失败时抛 AiUnavailableError（50003，与文档一致）。
 """
@@ -242,16 +241,17 @@ async def _advice_text(
         f"- 赶海判断：{beach.get('label', '')}，{beach.get('reason', '')}，{beach.get('goAdvice', '')}\n"
         f"{best_line}{leave_line}\n"
         f"请为赶海的小朋友（小学中高年级）写一段出门建议。\n"
-        f"**这条建议是当天凌晨一次性生成、全天内被反复展示的**，所以一律用「今天」表述，"
-        f"绝对不要出现「现在」「目前」「此刻」这类跟具体时刻绑定的词。\n"
-        f"**body 只写两件事**：\n"
-        f"1. 今天的潮汐情况（是涨潮还是退潮、潮高大约多少）；\n"
-        f"2. 今天什么时候适合赶海、什么时候该离开（请用上面给的具体时间点）。\n"
-        f"**不要写**：天气、气温、穿衣、装备、以及泛泛的安全叮嘱"
+        f"**这条建议是当天凌晨一次性生成、全天内被反复展示的**，所以只讲「今天」的时机安排，"
+        f"用「今天」表述。\n"
+        f"**body 只写赶海时机这一件事**：今天什么时候适合赶海、什么时候该离开"
+        f"（请用上面给的具体时间点）。\n"
+        f"**绝对不要写**：现在是涨潮还是退潮、潮高大约多少 —— 这些由界面按实时水位算好显示，"
+        f"文案里写了会和用户当下看到的对不上（预生成时是中午的水位，晚上展示时早已退潮）。"
+        f"也不写天气、气温、穿衣、装备、以及泛泛的安全叮嘱"
         f"（这些前端另有位置展示，写进来会被过滤掉）。\n"
-        f"要求：2 到 3 句短句、语气温和、不恐吓、不鼓励冒险，"
+        f"要求：1 到 2 句短句、语气温和、不恐吓、不鼓励冒险，"
         f"不要出现「绝对安全」「保证适合赶海」。只输出 JSON："
-        f'{{"headline":"一句话标题，20字以内","body":"2到3句话，只讲潮汐状态与赶海时机"}}'
+        f'{{"headline":"一句话标题，20字以内","body":"1到2句话，只讲赶海时机，不描述潮汐状态"}}'
     )
     raw = await _chat(
         [
@@ -365,9 +365,16 @@ async def advice_for_request(
     advice = dict(fallback)
     advice["adviceDate"] = date_str
     advice["generatedAt"] = None
-    if row is not None and row.headline and row.body:
-        advice["headline"] = row.headline
-        advice["body"] = row.body
+    if row is not None and row.body:
+        # 标题用 AI 写的短标题（「今天赶海时间提醒」这类），全天成立，可以放一整天。
+        # 但只在 generated_by == "ai" 时采用：AI 失败降级成规则文案时，库里存的标题
+        # 是生成时刻的状态句（「现在正在涨潮，先别下到礁石区」），当标题用就又变成
+        # 拿中午的状态糊弄晚上了 —— 那正是这次要修掉的问题，不能从正文挪到标题里。
+        ai_headline = row.headline if (row.generated_by or "") == "ai" else ""
+        advice["headline"] = ai_headline or fallback["headline"]
+        # 「此刻状态」那半句必须按请求这一刻的水位现算；库里只取 AI 写的「时机」部分
+        # （什么时候去、什么时候离开），这部分全天不变。
+        advice["body"] = f"{fallback['stateText']}{row.body}"
         advice["generatedBy"] = row.generated_by or "ai"
         advice["fallback"] = False
         advice["generatedAt"] = to_shanghai_iso(row.created_at)
@@ -667,6 +674,9 @@ async def species_guess(
         f'"land"（陆生生物或人造物）。这个标注只描述物种本身，与拍摄地点无关。\n\n'
         f"最后给 observeTip（观察建议）和 safetyTip（安全提醒）各一句。"
         f"若 isSeaCreature 为 false，observeTip 就提示用户把镜头对准海边的小生物重拍。\n\n"
+        f"**【输出格式】只输出紧凑 JSON**：不要缩进、不要换行、不要任何多余空格，"
+        f"整段 JSON 必须写在一行内。（缩进和换行都要模型逐字生成，会明显拖慢响应，"
+        f"而程序解析并不需要它们。）\n\n"
         f"只输出 JSON："
         f'{{"isSeaCreature":true,"objectName":"",'
         f'"items":[{{"label":"左下角礁石上的螃蟹",'
@@ -699,10 +709,8 @@ async def species_guess(
             _messages(prompt_text),
             model=settings.qwen_vl_model,
             temperature=0,  # 降到 0：同一张照片尽量给出稳定结果
-            # 生成耗时 ≈ 输出 token 数 ÷ 速度，是这条链路延迟的大头，所以卡着给：
-            # 600 够 items（最多 3 项 × 1~3 个候选）写完，比原来的 1200 少跑一半输出。
-            # timeout 20 留余量（前端 aiApi 是 25s 超时）。
-            max_tokens=600,
+            # 多物品返回体明显变长，给足 token 和超时（前端 aiApi 是 25s 超时，留余量）
+            max_tokens=1200,
             timeout=20,
         )
         return _parse_json(raw)
@@ -1315,3 +1323,119 @@ async def trash_guess(
         "items": items,
         "disclaimer": disclaimer,
     }
+
+
+async def is_marine_creature(
+    image_bytes: bytes, content_type: str = "image/jpeg"
+) -> tuple[bool, str, list | None]:
+    """识别照片主体：是不是海洋生物 + 名称 + 主体外接框。
+
+    返回 (是否海洋生物, 主体名称, box)。box 是归一化的 [x, y, w, h]（0~1，左上角起），
+    抠图时先用它裁到主体，再交给分割模型，背景干扰少、准确率更高。
+    **AI 不可用时返回 (True, "", None) 放行** —— 审核服务挂了不能把上传全堵死。
+    """
+    if not settings.dashscope_api_key:
+        return True, ""
+    prompt = """看这张照片的主体，回答两件事。
+
+1) isMarine：主体是不是海洋/潮间带生物（贝、螺、蟹、虾、鱼、海星、海葵、海藻、水母、章鱼等）。
+   以下算 true：真实拍摄的，无论在沙滩、手里、碗里、市场、锅里，或者近距离特写、翻拍照片。
+   以下算 false：卡通、插画、绘画、表情包、图案、Logo、3D 渲染、玩偶、模型；以及家具、电子产品、屏幕截图、建筑、纯风景、食物、日用品、人、猫狗等陆生动物。
+   看不清时算 true（交给人工复核）。
+
+2) box：主体的外接框，[x, y, w, h]，四个数都是 0~1 的相对比例，x/y 是左上角。isMarine=false 时给 null。
+
+objectName：主体的常用中文名，最多 8 个字（如「寄居蟹」「牡蛎」「小沙蟹」）；看不清时留空。isMarine=false 时写它实际是什么（如「桌子」「卡通螃蟹」）。
+只输出 JSON，不要解释：{"isMarine":true,"objectName":"寄居蟹","box":[0.2,0.1,0.6,0.8]}"""
+    try:
+        data = _compress_for_vl(image_bytes)
+        payload = _image_data_url(data, "image/jpeg")
+        raw = await _chat(
+            [
+                {"role": "system", "content": "你是内容审核助手，只输出 JSON。"},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": payload}},
+                    ],
+                },
+            ],
+            model=settings.qwen_vl_model,
+            temperature=0,
+            max_tokens=120,
+            timeout=15,
+        )
+        obj = _parse_json(raw or "")
+        flag = obj.get("isMarine", True)
+        if isinstance(flag, str):
+            flag = flag.strip().lower() not in ("false", "0", "no")
+        name = str(obj.get("objectName") or "").strip()[:32]
+
+        box = None
+        raw_box = obj.get("box")
+        if isinstance(raw_box, (list, tuple)) and len(raw_box) == 4:
+            try:
+                b = [float(v) for v in raw_box]
+                x, y, w, h = b
+                if 0 <= x < 1 and 0 <= y < 1 and 0 < w <= 1 and 0 < h <= 1:
+                    if x + w > 1:
+                        w = 1 - x
+                    if y + h > 1:
+                        h = 1 - y
+                    if w > 0.05 and h > 0.05:
+                        box = [round(x, 4), round(y, 4), round(w, 4), round(h, 4)]
+            except (TypeError, ValueError):
+                box = None
+
+        return bool(flag), name, box
+    except Exception:
+        return True, "", None
+
+
+async def is_tank_background(
+    image_bytes: bytes, content_type: str = "image/jpeg"
+) -> tuple[bool, str]:
+    """审核用户上传的潮池背景图。
+
+    背景图不要求主体是海洋生物，但必须是真实、适合做背景的照片：
+    拒绝截图/文字/二维码、卡通/插画、广告、人物特写、暴露血腥等。
+    返回 (是否通过, 不通过原因)。AI 不可用时放行，避免堵死上传。
+    """
+    if not settings.dashscope_api_key:
+        return True, ""
+    prompt = """判断这张图作为小程序用户背景图是否合法合规。
+
+只审「合规」，不审好不好看、是不是海洋/风景：
+通过（ok=true）：所有合法合规的图片，包括风景、室内、商品、食物、卡通、插画、截图、普通人物照等。
+不通过（ok=false）：色情裸露、低俗；暴力血腥；违法违禁品（毒品、武器等）；赌博、诈骗、广告导流；二维码/联系方式等站外引流；侵犯隐私或违反平台规则的其他内容。
+
+reason 只在 ok=false 时填写，不超过 12 个字，说明原因。
+只输出 JSON，不要解释：{"ok":true,"reason":""}"""
+    try:
+        data = _compress_for_vl(image_bytes)
+        payload = _image_data_url(data, content_type)
+        raw = await _chat(
+            [
+                {"role": "system", "content": "你是图片审核助手，只输出 JSON。"},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": payload}},
+                    ],
+                },
+            ],
+            model=settings.qwen_vl_model,
+            temperature=0,
+            max_tokens=80,
+            timeout=15,
+        )
+        obj = _parse_json(raw or "")
+        ok = obj.get("ok", True)
+        if isinstance(ok, str):
+            ok = ok.strip().lower() not in ("false", "0", "no")
+        reason = str(obj.get("reason") or "").strip()[:24]
+        return bool(ok), ("" if ok else (reason or "图片不适合做背景"))
+    except Exception:
+        return True, ""

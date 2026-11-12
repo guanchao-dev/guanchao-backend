@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.uploads import (
     ALLOWED_TYPES,
+    as_cos_redirect,
     EXT_CONTENT_TYPES,
     MAX_SIZE,
     _sniff_ext,
@@ -24,8 +25,18 @@ router = APIRouter(tags=["encyclopedia"])
 
 
 def _cover_url(species: Species) -> str:
-    """图鉴封面访问路径（前端拼接 BASE_URL 使用，BASE_URL 已含 /api/v1）。"""
-    return f"/encyclopedia/{species.id}/cover" if species.cover_key else ""
+    """图鉴封面地址。
+
+    COS 开着时直接给**签名直链**（小程序 mediaUrl 看到 http 开头会原样透传），
+    少一次「请求本服务再 302」的往返；回退本地磁盘时给相对路径，仍走 /cover 接口。
+    """
+    if not species.cover_key:
+        return ""
+    url = storage.public_url(species.cover_key)
+    if url.startswith("http"):
+        # 列表和详情都用这张。实测 173KB 原图 → 320px WebP 39KB，弱网差别最大
+        return storage.with_image_process(url, 320, 80)
+    return f"/encyclopedia/{species.id}/cover"
 
 
 def _image_media_type(object_key: str) -> str:
@@ -59,7 +70,10 @@ async def list_species(
     _, owner_id = identity
     lit = await unlocked_species_ids(db, owner_id)
     q = select(Species)
-    if category:
+    if category == "forage":
+        # 赶海生物 = 原来的贝类 / 蟹类 / 海藻 / 鱼类 / 其他
+        q = q.where(Species.category.in_(("shell", "crab", "algae", "fish", "other")))
+    elif category:
         q = q.where(Species.category == category)
     # 搜索：名称 / 别名 / 简介 / 栖息地 四处都算命中。
     # 排序按「命中得越靠前」铺：名字完全相同 > 名字前缀 > 名字包含 > 别名 > 正文。
@@ -211,6 +225,7 @@ async def species_detail(
             "aka": s.aka or [],
             "category": s.category,
             "coverUrl": _cover_url(s),
+            "summary": s.summary,
             "look": s.look,
             "habitat": s.habitat,
             "observeTip": s.observe_tip,
@@ -270,10 +285,17 @@ async def unfavorite_species(
 
 @router.get("/encyclopedia/{species_id}/cover")
 async def species_cover(species_id: str, db: AsyncSession = Depends(get_db)):
-    """返回官方图鉴封面图（本地直读）。"""
+    """返回官方图鉴封面图。
+
+    COS 开着的话 302 跳到对象存储直链（前提：小程序后台把 COS 域名配进了
+    downloadFile 合法域名 —— 详见 uploads.py::as_cos_redirect 的注释）。
+    """
     s = await db.get(Species, species_id)
     if s is None or not s.cover_key:
         raise NotFoundError("图鉴图片不存在")
+    redirect = await as_cos_redirect(s.cover_key)
+    if redirect is not None:
+        return redirect
     try:
         data = await storage.read_bytes(s.cover_key)
     except FileNotFoundError:
@@ -354,10 +376,16 @@ async def list_species_photos(
 
 @router.get("/encyclopedia/{species_id}/photos/{photo_id}/content")
 async def species_photo_content(species_id: str, photo_id: str, db: AsyncSession = Depends(get_db)):
-    """返回用户上传的照片（photo_id 不可猜测，供 <image> 直接加载）。"""
+    """返回用户上传的照片（photo_id 不可猜测，供 <image> 直接加载）。
+
+    COS 开着就直接 302 跳直链（见 uploads.py::as_cos_redirect）。
+    """
     photo = await db.get(SpeciesPhoto, photo_id)
     if photo is None or photo.species_id != species_id:
         raise NotFoundError("图片不存在")
+    redirect = await as_cos_redirect(photo.object_key)
+    if redirect is not None:
+        return redirect
     try:
         data = await storage.read_bytes(photo.object_key)
     except FileNotFoundError:

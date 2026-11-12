@@ -98,8 +98,8 @@ Authorization: Bearer <token>
 **内容变多了，字段结构没变**：
 
 - 勋章从 5 个变成 **18 个**
-- `achievements/overview` 的 `medalTotal` = `18`，`total`（可得分总数）= `1320`
-- ⚠️ `percent` 的分母（`total`）现在是 **1320**，**所有老用户的百分比会相应下降**
+- `achievements/overview` 的 `medalTotal` = `13`，`total`（可得分总数）= `950`
+- ⚠️ `percent` 的分母（`total`）现在是 **950**，**所有老用户的百分比会相应下降**
   （他们没解锁新成就）。这是预期的，不是 bug
 - `levelProgress` 在 v2 后半程改成了**本级进度**，不再是这个百分比 —— 见 §八
 - 每个接口「发什么 / 返什么」的完整清单见 §九
@@ -313,11 +313,11 @@ const FALLBACK_SPOTS: GuideSpot[] = [
 xp = 成就值(user.score) + 去过的点位数 × 60
 ```
 
-- **成就值**：已解锁勋章的 `rewards.score` 累计（18 枚全拿到是 **1320**）。
+- **成就值**：已解锁勋章的 `rewards.score` 累计（13 枚全拿到是 **950**）。
 - **去过的点位**：用户的**观潮记录**（`watch_records`）与**打卡记录**（`checkins`）里
   出现过的不同 `spot_id` 的**并集**。同一个点只算一次，重复去不再加。
 - **每去一个新点位 +60 经验**：和一枚**稀有**勋章同档。实地跑一个点位是这个产品最重的
-  行为，值一枚稀有勋章；但整个成就系统（18 枚合计）也才 1320，再高就把成就压没了，
+  行为，值一枚稀有勋章；但整个成就系统（13 枚合计）也才 950，再高就把成就压没了，
   所以定 **60**。
 
 ### 等级门槛（累计经验）
@@ -335,7 +335,7 @@ xp = 成就值(user.score) + 去过的点位数 × 60
 | Lv.9 | 2300 | 700 |
 | Lv.10 | 3000 | ——（封顶） |
 
-满经验 ≈ **3600**（1320 成就值 + 38 个点位 × 60），所以 Lv.10 只有「集齐勋章 + 跑遍点位」到得了。
+满经验 ≈ **3230**（950 成就值 + 38 个点位 × 60），所以 Lv.10 只有「集齐勋章 + 跑遍点位」到得了。
 门槛在 `app/services/levels.py` 的 `LEVEL_THRESHOLDS`，要调只改这一行；每点经验是
 `XP_PER_SPOT`。
 
@@ -397,7 +397,7 @@ xp = 成就值(user.score) + 去过的点位数 × 60
 | `GET /achievements/pending-unlocks` | ✅ | 已解锁但还没弹过祝贺的勋章 |
 | `POST /achievements/report` | ✅ | 上报服务端看不见的动作（深蓝百万里） |
 | `POST /medals/{medal_id}/unlock-ack` | ✅ | 确认「祝贺弹窗已看过」 |
-| `GET /medals` | 可选 | 勋章墙列表（18 枚，带锁定态） |
+| `GET /medals` | 可选 | 勋章墙列表（13 枚，带锁定态） |
 | `GET /medals/{medal_id}` | 可选 | 单个勋章详情（解锁条件 + 奖励） |
 | `POST /medals/{medal_id}/share` | ✅ | 生成分享文案 / 跳转路径 |
 | `GET /achievements/friends` | ✅ | 好友榜（首版固定只返回自己） |
@@ -415,15 +415,15 @@ xp = 成就值(user.score) + 去过的点位数 × 60
 无 query 参数。
 
 ```json
-{ "score": 120, "total": 1320, "percent": 9, "unlockedCount": 3, "medalTotal": 18,
+{ "score": 120, "total": 950, "percent": 13, "unlockedCount": 3, "medalTotal": 13,
   "level": 3, "title": "海洋探索家", "levelProgress": 60,
   "xp": 240, "xpToNext": 60, "visitedSpotCount": 2 }
 ```
 
 （这个例子：成就值 120 + 去过 2 个点位 × 60 = **240 经验** → Lv.3，本级要 150→300，
-所以进度 60%、还差 60。`percent` 是勋章收集度 120/1320 = 9%。）
+所以进度 60%、还差 60。`percent` 是勋章收集度 120/950 = 13%。）
 
-- `score` 成就值 · `total` 可得分总数（1320）· `percent` 勋章收集度 = `score/total`
+- `score` 成就值 · `total` 可得分总数（950）· `percent` 勋章收集度 = `score/total`
 - `level` / `title` / `levelProgress` / `xp` / `xpToNext` / `visitedSpotCount`：等级相关，见 §八
 - **未登录**时返回全 0 版本：`score/percent/unlockedCount/xp/visitedSpotCount = 0`、
   `level = 1`、`title = "海洋探索家"`、`levelProgress = 0`、`xpToNext = 60`
@@ -466,7 +466,7 @@ POST /api/v1/medals/medal_7/unlock-ack
 
 ### `GET /medals`
 
-无参数，按 `sort` 排序返回全部 18 枚，**只带墙上要用的字段**（没有 description / rewards）。
+无参数，按 `sort` 排序返回全部 13 枚，**只带墙上要用的字段**（没有 description / rewards）。
 
 ```json
 { "list": [ { "id": "medal_1", "title": "初次见面", "rarity": "common",
@@ -705,7 +705,7 @@ xp = 成就值 + 去过的点位数 × 60
 
 | 渠道 | 怎么来 |
 |---|---|
-| **成就值** | 已解锁勋章的 `rewards.score` 累计（18 枚全拿 = 1320） |
+| **成就值** | 已解锁勋章的 `rewards.score` 累计（13 枚全拿 = 950） |
 | **去新点位** | 每去一个（新）点位 **+60**（`XP_PER_SPOT`，≈ 一枚稀有勋章） |
 
 `/auth/me` 与 `/achievements/overview` 都返回 `xp` / `xpToNext` / `levelProgress` /
@@ -846,3 +846,109 @@ contentApi.encyclopedia({ category, keyword })
 | `停车场` | 8 | 描述里提过停车场的 |
 | `zzz不存在` | 0 | — |
 | `%` | 0 | 没被当通配符 ✅ |
+
+---
+
+## 十四、勋章收成 13 枚
+
+前端正式版（v1.0.0）把 13 枚众筹成就的**图片路径写死**在代码里、改不了，后端配合收口：
+**删掉了最早那 5 枚** —— `medal_1` 初次见面 / `medal_2` 探索新星 / `medal_3` 无畏冒险家 /
+`medal_4` 宝藏猎人 / `medal_5` 解谜达人。
+
+### 接口变化
+
+| 接口 / 字段 | 之前 | 现在 |
+|---|---|---|
+| `GET /medals` | 18 枚 | **13 枚**（`medal_6` ~ `medal_18`） |
+| `/achievements/overview` 的 `medalTotal` | 18 | **13** |
+| `/achievements/overview` 的 `total`（可得分总数） | 1320 | **950** |
+| `/achievements/overview` 的 `percent` 分母 | 1320 | **950** |
+| `/achievements/pending-unlocks` | 可能推老 5 枚 | 只会有这 13 枚 |
+
+**响应结构没变**，只是数量和分母变了。
+
+> 前端不用改：`pages/achieve` 里的 `medalTotal: 18` 只是**兜底默认值**
+> （`data.medalTotal || 18`），后端返 13 就显示 13；**勋章墙**是自己数列表的
+> （`total = sorted.length`），返 13 枚自然显示「已解锁 n / 13」。
+
+### 顺带处理的两件事
+
+1. **不再发放**：`evaluate_medals()` 里那 5 条解锁条件摘掉了 —— 否则用户会解锁到一堆
+   **界面上看不见的勋章**，还会弹对应的祝贺弹窗（`pending-unlocks` 推的）。
+2. **已发记录清掉 + 积分重算**：`users.score` 是「已解锁勋章 `rewards.score` 的累计」，
+   勋章删了分还留着的话，完成度会算到 100% 以上、等级也跟着虚高。启动时
+   `_remove_deprecated_medals()` 会把受影响用户的积分按剩余勋章重算 ——
+   线上 3 个用户因此掉分（290→150 / 20→0 / 270→150），`users.level` 会在下次读
+   `/auth/me` 时按新分数自动跟着降。
+
+> 要恢复：把 id 从 `seed.py` 的 `DEPRECATED_MEDALS` 里删掉、条目加回 `MEDALS` 即可。
+
+### 勋章图的正式图案已上线（2026-10-07）
+
+13 枚统一换成手绘正式图案，文件名与占位图的对应关系：
+
+| 勋章 | 图片文件 |
+|---|---|
+| medal_6 蓝色青年行动 | `badges/crab-heart.png` |
+| medal_7 深蓝百万里 | `badges/crab-map.png` |
+| medal_8 ……好吧也比没有强 | `badges/crab-dig.png` |
+| medal_9 蟹蟹！ | `badges/crab-cloud.png` |
+| medal_10 蟹老板 | `badges/crab-crown.png` |
+| medal_11 海景房 | `badges/crab-star.png` |
+| medal_12 海星拾趣 | `badges/medal_12.png` ← 独立文件 |
+| medal_13 海洋记录员 | `badges/crab-book.png` |
+| medal_14 深蓝小卫士 | `badges/crab-helmet.png` |
+| medal_15 海的味道我知道 | `badges/crab-checklist.png` |
+| medal_16 siuuuuuu | `badges/crab-astronaut.png` |
+| medal_17 洞口常含盐巴 | `badges/medal_17.png` ← 独立文件 |
+| medal_18 拍我干什么 | `badges/crab-search.png` |
+
+- 前 11 张**直接覆盖了原文件名**，所以前端记的路径不用改
+- `medal_12` / `medal_17` 原本和 `medal_6` / `medal_8` **共用一张占位图**，一枚一张之后必须分开，所以给了独立文件名
+- 图片都压到 **320×320**（详情页是 320rpx，按它的 @2x 定的）
+
+#### ⚠️ 换图必须把 `?v=` 版本号 +1
+
+`iconUrl` 现在统一带 `?v=2`：
+
+```
+https://www.blueakaiwu.cn/api/v1/static/assets/badges/crab-crown.png?v=2
+```
+
+**为什么**：静态资源带 `Cache-Control: public, max-age=86400`（`endpoints/assets.py`），
+客户端**按 URL 缓存 24 小时**。只覆盖文件不改 URL 的话，老用户最长 24 小时还会看到旧图
+（这次就踩到了）。
+
+换图流程：**传新文件 → 把 `seed.py` 的 `_MEDAL_IMG_V` 从 `?v=2` 改成 `?v=3` → 重启**。
+`medals.icon_key` 不在 `_sync_medal_fields` 的同步范围内（那是刻意的），所以改完种子
+还要单独刷一次库（跑一段 `Medal.icon_key = item["icon_key"]` 的脚本）。
+
+---
+
+## 十五、默认昵称带唯一编号
+
+用户没在登录页点「使用微信昵称」时，原来的默认名是写死的 **「追潮探索者」** ——
+实测 15 个用户里 11 个同名，列表和排行榜上根本分不清谁是谁。
+
+**现在**：默认名 = `追潮者` + 4 位编号（如 `追潮者8392`），**编号唯一**。
+
+| | 怎么处理 |
+|---|---|
+| **新用户** | 登录时由 `auth.py::gen_nickname()` 生成。生成前回库查一次，撞了就换；4 位不够用自动加长到 5、6 位 |
+| **存量用户** | `tools/rename_default_nicknames.py` 一次性改（默认只预览，加 `--apply` 才写库）。**只动昵称**；用户自己填过的名字不受影响（不在 `LEGACY_DEFAULT_NICKS` 里） |
+
+已在 2026-10-07 执行：**11 个用户改名，库里 15 个用户现在没有重名** ✓
+
+### 为什么不能用微信里的名字
+
+微信登录接口（`sns/jscode2session`，见 `app/services/wechat.py`）**只返回 openid**，
+返回体里根本没有昵称字段 —— 微信 2022 年之后刻意砍掉了服务端拿昵称的能力
+（`getUserInfo` / `getUserProfile` 现在只给「微信用户」这种匿名值），
+昵称和头像必须由**用户在客户端主动授权**（登录页那个 `<input type="nickname">`）。
+
+所以新用户能不能显示真名，取决于**前端有没有引导用户去点那个输入框** ——
+这是纯后端做不到的事。后端能保证的只是：没填的人不会一堆人同名。
+
+> 昵称在接口里的位置：`/auth/wechat-login`、`/auth/me`、`/achievements/friends`、
+> `/achievements/leaderboard`、社区作者卡都返回 `nickname` / `user.nickname`。
+> 用户改自己的名字走 `POST /me/nickname`（1~20 字，过内容安全校验）。

@@ -50,6 +50,14 @@ class Settings(BaseSettings):
     image_gen_model: str = "wanx2.1-t2i-plus"
     image_edit_model: str = "wanx2.1-imageedit"
 
+    # 潮池 AI 精修抠图（千问图像编辑，同步接口，按张计费）。
+    # 默认 turbo：约 0.1 元/张、10 秒；pro 更细但约 0.25 元/张、25 秒。
+    # 只在用户主动点「AI 精修」时调用，默认抠图仍走本地 u2net。
+    qwen_cutout_model: str = "qwen-image-2.1-turbo"
+    qwen_cutout_timeout: float = 90.0
+    qwen_cutout_retries: int = 1
+    qwen_cutout_daily_limit: int = 20  # 每个用户每天最多几次，防止刷
+
     # 管理后台（审核用户投稿的宝藏点位）。留空则相关接口一律拒绝访问。
     admin_token: str = ""
 
@@ -59,6 +67,13 @@ class Settings(BaseSettings):
     cos_region: str = ""
     cos_secret_id: str = ""
     cos_secret_key: str = ""
+    # 桶是私有读：对外一律给预签名临时链接。
+    # 默认 1 天；小程序渲染时每次现签，链接过期前早就重新取到新链接了。
+    cos_sign_expire_seconds: int = 86400
+    # 同一对象在进程内复用同一个签名链接的时长。
+    # 必须明显短于上面有效期：URL 稳定，微信/浏览器的图片缓存才命中，
+    # 否则每次拉列表都换 URL，48 张封面会被反复重新下载。
+    cos_url_cache_seconds: int = 21600
 
 
 settings = Settings()

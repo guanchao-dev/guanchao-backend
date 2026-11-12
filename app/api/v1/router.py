@@ -4,6 +4,7 @@ from app.api.v1.endpoints import (
     activities,
     admin,
     ai,
+    aquarium,
     assets,
     auth,
     cards,
@@ -11,6 +12,7 @@ from app.api.v1.endpoints import (
     community,
     encyclopedia,
     explore,
+    gacha,
     geo,
     home,
     knowledge,
@@ -31,6 +33,7 @@ from app.api.v1.endpoints import (
 api_router = APIRouter()
 api_router.include_router(admin.router)
 api_router.include_router(ai.router)
+api_router.include_router(aquarium.router)
 api_router.include_router(auth.router)
 api_router.include_router(home.router)
 api_router.include_router(spots.router)
@@ -45,6 +48,7 @@ api_router.include_router(privacy.router)
 api_router.include_router(legal.router)
 api_router.include_router(community.router)
 api_router.include_router(explore.router)
+api_router.include_router(gacha.router)
 api_router.include_router(geo.router)
 api_router.include_router(reminders.router)
 api_router.include_router(assets.router)

@@ -27,8 +27,15 @@ class User(Base):
     title: Mapped[str] = mapped_column(String(64), default="海洋探索家")
     score: Mapped[int] = mapped_column(Integer, default=0)
     total: Mapped[int] = mapped_column(Integer, default=0)
+    coins: Mapped[int] = mapped_column(Integer, default=0)
+    coins_seeded: Mapped[bool] = mapped_column(Boolean, default=False)
     need_guardian_consent: Mapped[bool] = mapped_column(Boolean, default=False)
     guardian_consented: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 封禁（管理后台操作）：为 True 时该账号所有需要登录的接口一律 401，
+    # 微信登录也会当场被拦下。原因/时间只给管理员看，不下发给用户端。
+    banned: Mapped[bool] = mapped_column(Boolean, default=False)
+    ban_reason: Mapped[str] = mapped_column(String(255), default="")
+    banned_at: Mapped[str] = mapped_column(String(32), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -215,7 +222,14 @@ class Upload(Base):
     content_type: Mapped[str] = mapped_column(String(64), default="")
     ext: Mapped[str] = mapped_column(String(8), default="jpg")
     object_key: Mapped[str] = mapped_column(String(255), default="")
-    status: Mapped[str] = mapped_column(String(16), default="processing")  # processing|approved|rejected
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending|approved|rejected|appealed
+    # AI 自动驳回时记原因（如「不是海洋生物（猫）」），人工驳回为「人工驳回」
+    reject_reason: Mapped[str] = mapped_column(String(64), default="")
+    reject_source: Mapped[str] = mapped_column(String(16), default="")  # ai|admin
+    appealed_at: Mapped[str] = mapped_column(String(32), default="")
+    # 申诉通过的图加入潮池后标记，防止二次加入
+    used_at: Mapped[str] = mapped_column(String(32), default="")
+    used_resident_id: Mapped[str] = mapped_column(String(64), default="")
     width: Mapped[int] = mapped_column(Integer, nullable=True)
     height: Mapped[int] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -663,4 +677,60 @@ class LightMapLit(Base):
     map_id: Mapped[str] = mapped_column(String(64), index=True)
     region_id: Mapped[str] = mapped_column(String(64))
     owner_id: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AquariumResident(Base):
+    """潮池住客。图片本体在对象存储（COS/本地磁盘），这里只存 object_key。"""
+
+    __tablename__ = "aquarium_residents"
+    # users.id 是 utf8mb4_unicode_ci；MySQL 8.4 新表默认 0900_ai_ci，
+    # 不显式对齐会报 3780（外键列排序规则不兼容）
+    __table_args__ = {
+        "mysql_charset": "utf8mb4",
+        "mysql_collate": "utf8mb4_unicode_ci",
+    }
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.id"), index=True)
+    name: Mapped[str] = mapped_column(String(24), default="小生物")
+    kind: Mapped[str] = mapped_column(String(8), default="fish")  # fish|crab|snail|jelly
+    object_key: Mapped[str] = mapped_column(String(255), default="")
+    aspect: Mapped[float] = mapped_column(Float, default=1.0)  # 高 / 宽
+    scale: Mapped[float] = mapped_column(Float, default=1.0)  # 用户调节的显示大小 0.6~1.6
+    rotation: Mapped[int] = mapped_column(Integer, default=0)  # 贴纸旋转角度 -180~180
+    species_name: Mapped[str] = mapped_column(String(64), default="")  # AI/用户给的物种名，用于新物种奖励
+    base_flip: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AquariumSetting(Base):
+    """潮池外观设置：自定义背景、白天/夜晚、横版/竖版。"""
+
+    __tablename__ = "aquarium_settings"
+    __table_args__ = {
+        "mysql_charset": "utf8mb4",
+        "mysql_collate": "utf8mb4_unicode_ci",
+    }
+
+    user_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.id"), primary_key=True)
+    background_key: Mapped[str] = mapped_column(String(255), default="")
+    theme: Mapped[str] = mapped_column(String(8), default="day")  # day|night
+    landscape: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AquariumSpeciesReward(Base):
+    """潮池加入新物种时发代币的去重记录。"""
+
+    __tablename__ = "aquarium_species_rewards"
+    __table_args__ = (
+        UniqueConstraint("user_id", "species_key", name="uk_aquarium_species_rewards"),
+        {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"},
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.id"), index=True)
+    species_key: Mapped[str] = mapped_column(String(64), index=True)
+    coins: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

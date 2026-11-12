@@ -110,7 +110,32 @@ def _cos_delete(object_key: str) -> None:
     _client().delete_object(Bucket=settings.cos_bucket, Key=object_key)
 
 
+def _cos_exists(object_key: str) -> bool:
+    """对象在不在 COS 上。任何异常都当「不在」—— 宁可退回本地读，也别拿 404 当正常。"""
+    from qcloud_cos.cos_exception import CosServiceError
+
+    try:
+        _client().head_object(Bucket=settings.cos_bucket, Key=object_key)
+        return True
+    except CosServiceError:
+        return False
+    except Exception:
+        return False
+
+
 # ---------------- 对外 ----------------
+async def exists_in_cos(object_key: str) -> bool:
+    """对象在不在 COS 上。没启用 COS 一律 False。
+
+    给「302 跳直链」用的。**不能省这一步**：`read_bytes` 有「COS 读不到就回退本地
+    磁盘」的兜底（启用 COS 之前传的老图还都在服务器上），而 302 会绕过那个兜底 ——
+    只存在磁盘上的图直接变 404。已经踩过两次（紫菜 / 帽贝 / 虾蛄 / 月螺 4 张封面）。
+    """
+    if not cos_enabled() or not object_key:
+        return False
+    return await asyncio.to_thread(_cos_exists, object_key)
+
+
 async def save_bytes(object_key: str, data: bytes) -> str:
     if cos_enabled():
         await asyncio.to_thread(_cos_save, object_key, data)

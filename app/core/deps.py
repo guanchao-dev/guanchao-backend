@@ -15,7 +15,7 @@ async def get_current_user(
     authorization: Optional[str] = Header(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """必须登录，否则抛 40101。"""
+    """必须登录，否则抛 40101。**被封禁的账号一律拒绝。**"""
     if not authorization or not authorization.startswith("Bearer "):
         raise UnauthorizedError("未登录")
     token = authorization[len("Bearer "):].strip()
@@ -23,6 +23,8 @@ async def get_current_user(
     user = await db.get(User, payload.get("sub"))
     if user is None:
         raise UnauthorizedError("用户不存在")
+    if user.banned:
+        raise UnauthorizedError("账号已被封禁，如有疑问请联系管理员")
     return user
 
 
@@ -30,7 +32,12 @@ async def get_optional_user(
     authorization: Optional[str] = Header(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> Optional[User]:
-    """可选登录：带有效 token 返回用户，否则返回 None。"""
+    """可选登录：带有效 token 返回用户，否则返回 None。
+
+    被封禁的账号按**未登录**处理：走到这里的多是「游客可玩、登录同步」的接口
+    （观潮、点亮地图），封禁的人降级成游客即可；需要登录的接口由
+    `get_current_user` 明确拒绝。
+    """
     if not authorization or not authorization.startswith("Bearer "):
         return None
     token = authorization[len("Bearer "):].strip()
@@ -38,7 +45,10 @@ async def get_optional_user(
         payload = decode_access_token(token)
     except UnauthorizedError:
         return None
-    return await db.get(User, payload.get("sub"))
+    user = await db.get(User, payload.get("sub"))
+    if user is not None and user.banned:
+        return None
+    return user
 
 
 def ensure_consent(user: User) -> None:
@@ -48,13 +58,28 @@ def ensure_consent(user: User) -> None:
 
 
 async def get_identity(
+    user: Optional[User] = Depends(get_optional_user),
+) -> tuple[Optional[User], str]:
+    """身份：**必须登录**，未登录抛 40101。
+
+    这个依赖原来允许游客（拿 X-Client-Id 当 `client:{id}`），观潮 / 点亮地图 / 上传图片 /
+    上传点位 / 图鉴点亮这些「游客可玩、登录同步」的功能全走它。
+    **2026-10-08 起统一收紧成必须登录** —— 游客写入这条路没了，登录时合并游客数据
+    （`_merge_guest_data`）也就基本用不上了，保留只是为了兼容库里已有的 client 数据。
+    """
+    if user is None:
+        raise UnauthorizedError("未登录")
+    return user, f"user:{user.id}"
+
+
+async def get_guest_identity(
     x_client_id: Optional[str] = Header(default=None, alias="X-Client-Id"),
     user: Optional[User] = Depends(get_optional_user),
 ) -> tuple[Optional[User], str]:
-    """游客用 X-Client-Id 作为身份，登录用 user_id。
+    """**允许游客**的身份。只有确实不需要账号的场景才用它。
 
-    返回 (user, owner_id)：owner_id 为 "user:{id}" 或 "client:{id}"，用于
-    观潮观察 / 点亮地图这类「游客可玩、登录同步」的功能。
+    目前只有研学报到（`POST /records/checkin`）：学生扫老师给的码报到，身份由表单里的
+    姓名 + 学号自带，不该强制他们先注册登录。
     """
     if user is not None:
         return user, f"user:{user.id}"

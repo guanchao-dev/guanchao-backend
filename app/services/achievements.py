@@ -1,11 +1,15 @@
 """成就 / 勋章结算。根据用户行为判断并解锁勋章。
 
 条件集中在 `evaluate_medals()` 一个地方；它由「用户刚做完某个动作」的接口调用
-（识别 / 生成图鉴卡 / 打卡 / 闯关 / 观潮点亮 / 垃圾识别 / 登录），
-返回本次**新解锁**的勋章 id，调用方塞进响应的 `unlockedMedalIds`。
+（识别 / 观潮点亮 / 垃圾识别 / 登录），返回本次**新解锁**的勋章 id，
+调用方塞进响应的 `unlockedMedalIds`。
 
 唯一一个服务端看不见的动作（点进「深蓝百万里」链接）走 `grant_medal()`，
 由 POST /achievements/report 直接发。
+
+勋章一共 13 枚（众筹那批）。最早那 5 枚（初次见面 / 探索新星 / 无畏冒险家 /
+宝藏猎人 / 解谜达人）已废弃 —— 前端正式版只认这 13 枚，后端不再发放，
+并在启动时连同已发记录一起清掉（见 db/seed.py 的 DEPRECATED_MEDALS）。
 """
 from datetime import datetime
 
@@ -14,11 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import SHANGHAI_TZ, new_id
 from app.db.models import (
-    Card,
-    Checkin,
     Guess,
     Medal,
-    QuizAttempt,
     Species,
     SpeciesUnlock,
     TrashGuess,
@@ -30,12 +31,7 @@ from app.services.ai import primary_candidates
 
 # 勋章解锁来源（对应 pending-unlocks / unlock-ack 的 source 字段）
 MEDAL_SOURCE = {
-    "medal_1": "card",
-    "medal_2": "checkin",
-    "medal_3": "quiz",
-    "medal_4": "card",
-    "medal_5": "guess",
-    # ===== 众筹成就 =====
+    # ===== 众筹成就（13 枚）=====
     "medal_6": "login",     # 活动期间登录
     "medal_7": "report",    # 前端上报（点进深蓝百万里）
     "medal_8": "guess",
@@ -56,6 +52,15 @@ MEDAL_SOURCE = {
 # 要改只改这里。
 CRAB_TARGET = 10       # 蟹老板：识别到螃蟹的次数
 SPECIES_TARGET = 10    # 海洋记录员：累计识别到的不同物种数
+
+# 成就代币：按稀有度给，抽卡用
+COIN_BY_RARITY = {
+    "common": 20,
+    "rare": 50,
+    "epic": 100,
+    "legendary": 200,
+    "hidden": 80,
+}
 
 # 「蓝色青年行动」的活动窗口（北京时间，含首尾）。表里备注「后续有机会返场」，
 # 所以按「月-日」比对，每年这个窗口自动生效。
@@ -86,6 +91,7 @@ async def _unlock(db: AsyncSession, user: User, medal_ids: list[str]) -> list[st
     }
     newly: list[str] = []
     score_add = 0
+    coins_add = 0
     for mid in fresh:
         m = medals.get(mid)
         if m is None:
@@ -100,13 +106,22 @@ async def _unlock(db: AsyncSession, user: User, medal_ids: list[str]) -> list[st
             )
         )
         newly.append(mid)
+        coin_reward = COIN_BY_RARITY.get(m.rarity, 0)
         if isinstance(m.rewards, dict):
             try:
                 score_add += int(m.rewards.get("score") or 0)
             except (TypeError, ValueError):
                 pass
+            try:
+                explicit_coins = int(m.rewards.get("coins") or 0)
+                if explicit_coins:
+                    coin_reward = explicit_coins
+            except (TypeError, ValueError):
+                pass
+        coins_add += coin_reward
     if newly:
         user.score = (user.score or 0) + score_add
+        user.coins = (user.coins or 0) + coins_add
         await db.commit()
         # 成就值是经验的来源之一，等级跟着重算（只在变化时才写库）
         await levels.sync_user_level(db, user)
@@ -124,23 +139,6 @@ def _in_blue_youth_window(now: datetime) -> bool:
 
 async def evaluate_medals(db: AsyncSession, user: User) -> list[str]:
     """结算勋章，返回本次新解锁的 medal id 列表。"""
-    card_count = (
-        await db.execute(select(func.count()).select_from(Card).where(Card.user_id == user.id))
-    ).scalar() or 0
-    distinct_spots = (
-        await db.execute(
-            select(func.count(func.distinct(Checkin.spot_id))).where(
-                Checkin.user_id == user.id, Checkin.spot_id != ""
-            )
-        )
-    ).scalar() or 0
-    safety_passed = (
-        await db.execute(
-            select(func.count())
-            .select_from(QuizAttempt)
-            .where(QuizAttempt.user_id == user.id, QuizAttempt.quiz_id == "quiz_safety", QuizAttempt.passed == True)  # noqa: E712
-        )
-    ).scalar() or 0
     trash_guesses = (
         await db.execute(
             select(func.count()).select_from(TrashGuess).where(TrashGuess.user_id == user.id)
@@ -155,7 +153,6 @@ async def evaluate_medals(db: AsyncSession, user: User) -> list[str]:
     # 扫这个用户的全部识别记录，一次拿到下面几个条件需要的所有信息。
     # 记录量很小（一次识别一行），换成一堆 COUNT 反而不划算。
     guesses = (await db.execute(select(Guess).where(Guess.user_id == user.id))).scalars().all()
-    guess_count = len(guesses)
     seen_species: set[str] = set()
     crab_rounds = 0          # 有螃蟹的识别次数
     max_objects = 0          # 单次识别里最多的物体数
@@ -184,13 +181,7 @@ async def evaluate_medals(db: AsyncSession, user: User) -> list[str]:
     )
 
     conditions = {
-        # ===== 原有 5 个 =====
-        "medal_1": card_count >= 1,      # 首次生成图鉴卡
-        "medal_2": distinct_spots >= 3,  # 3 个不同点位打卡
-        "medal_3": safety_passed >= 1,   # 完成安全观察闯关
-        "medal_4": card_count >= 5,      # 累计 5 张图鉴卡
-        "medal_5": guess_count >= 3,     # 对照图鉴完成 3 次猜测
-        # ===== 众筹成就 =====
+        # ===== 众筹成就（13 枚，前端正式版只认这些）=====
         # medal_7（深蓝百万里）服务端看不见，只能由 report 接口 grant_medal
         "medal_6": _in_blue_youth_window(datetime.now(SHANGHAI_TZ)),
         "medal_8": saw_stone,

@@ -229,6 +229,19 @@
     transition: border-color .12s;
   }
   .photo-thumb:hover img { border-color: var(--teal); }
+  /* 新建点位时「待上传 / 已上传」的选图 */
+  .photo-pick { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+  .photo-pick-item { width: 112px; }
+  .photo-pick-item img {
+    width: 112px; height: 112px; object-fit: cover; display: block;
+    border: 1px solid var(--line); border-radius: 10px; background: #F5F5F1;
+  }
+  .photo-pick-del {
+    display: block; width: 112px; margin-top: 6px; padding: 3px 0;
+    border: 1px solid var(--line); border-radius: 8px; background: #fff;
+    color: var(--faint); font-size: 12px; cursor: pointer;
+  }
+  .photo-pick-del:hover { border-color: #C0392B; color: #C0392B; }
   /* 可点击的文字（反馈里的点位名 → 跳到那条投稿） */
   .link { color: var(--teal); text-decoration: underline; cursor: pointer; }
   .link:hover { color: var(--teal-dark); }
@@ -240,6 +253,16 @@
     font: inherit; font-size: 13.5px; line-height: 1.6; resize: vertical;
   }
   .reply-input:focus {
+    outline: none; border-color: var(--teal); background: #fff;
+    box-shadow: 0 0 0 3px rgba(14, 124, 134, 0.12);
+  }
+  .coin-edit { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .coin-input {
+    width: 170px; padding: 9px 12px; box-sizing: border-box;
+    border: 1px solid var(--line); border-radius: 8px; background: #FCFCFB;
+    font: inherit; font-size: 13.5px;
+  }
+  .coin-input:focus {
     outline: none; border-color: var(--teal); background: #fff;
     box-shadow: 0 0 0 3px rgba(14, 124, 134, 0.12);
   }
@@ -353,6 +376,7 @@
     <span class="brand-sub">管理系统</span>
   </div>
   <div class="spacer"></div>
+  <button class="btn primary" id="newSpotBtn">＋ 新建官方点位</button>
   <button class="btn" id="refreshBtn">刷新</button>
   <button class="btn" id="logoutBtn">切换令牌</button>
 </header>
@@ -417,15 +441,20 @@
   // src: sub = 投稿（/admin/submissions），fb = 用户反馈（/admin/feedback）
   var GROUPS = [
     { key: 'spots', label: '宝藏点位' },
+    { key: 'users', label: '用户' },
     { key: 'general', label: '通用反馈' }
   ];
   var VIEWS = {
     spots: [
-      { key: 'pending', label: '待审核', src: 'sub' },
+      // 用户投稿已经改成「仅自己可见」的私人记录，这里只剩历史数据可查，
+      // 不再作为发布官方点位的入口（官方点位走右上角「＋ 新建官方点位」）。
+      { key: 'pending', label: '待审核（历史）', src: 'sub' },
       { key: 'approved', label: '已通过', src: 'sub' },
       { key: 'rejected', label: '已驳回', src: 'sub' },
       { key: 'fb_review', label: '审核反馈', src: 'fb', kind: 'review' }
     ],
+    // 用户一级下只有一个视图，二级那一行就不显示了
+    users: [{ key: 'users', label: '全部用户', src: 'user' }],
     // 通用反馈一级下只有一个视图，二级那一行就不显示了
     general: [{ key: 'fb_general', label: '通用反馈', src: 'fb', kind: 'general' }]
   };
@@ -449,7 +478,9 @@
     page: 1, total: 0, list: [], counts: {}, fbCounts: {},
     // 反馈栏里再分「未处理 / 已处理」
     fbStatus: 'pending',
-    selectedId: null, mode: null, busy: false
+    selectedId: null, mode: null, busy: false,
+    // 「新建官方点位」里已经传好的照片：uploadId 用来发布，预览 URL 给管理员看
+    newPhotoIds: [], newPhotoPreviews: []
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -550,7 +581,9 @@
     state.page = page;
     try {
       var data;
-      if (tabOf(state.tab).src === 'fb') {
+      if (tabOf(state.tab).src === 'user') {
+        data = await api('/admin/users?page=' + page + '&pageSize=' + PAGE_SIZE);
+      } else if (tabOf(state.tab).src === 'fb') {
         var ft = tabOf(state.tab);
         data = await api('/admin/feedback?kind=' + ft.kind + '&status=' + state.fbStatus +
           '&page=' + page + '&pageSize=' + PAGE_SIZE);
@@ -623,6 +656,29 @@
   function renderList() {
     var box = $('listScroll');
 
+    if (tabOf(state.tab).src === 'user') {
+      if (!state.list.length) {
+        box.innerHTML = '<div class="list-empty"><div class="big">还没有用户</div></div>';
+        $('listFoot').classList.add('hidden');
+        return;
+      }
+      box.innerHTML = state.list.map(function (u) {
+        return '<div class="row' + (u.banned ? ' rejected' : '') +
+          (u.id === state.selectedId ? ' selected' : '') + '" data-id="' + esc(u.id) + '">' +
+          '<span class="row-dot"></span>' +
+          '<div class="row-main">' +
+            '<div class="row-name">' + esc(u.nickname || '（无昵称）') +
+              (u.banned ? ' <span class="pill rejected">已封禁</span>' : '') + '</div>' +
+            '<div class="row-addr">Lv.' + esc(String(u.level || 1)) + ' · ' +
+              esc(String(u.score || 0)) + ' 分 · ' + esc(String(u.coins || 0)) + ' 代币</div>' +
+          '</div>' +
+          '<div class="row-side">' + esc(timeAgo(u.createdAt)) + '</div>' +
+        '</div>';
+      }).join('');
+      $('listFoot').classList.toggle('hidden', state.list.length >= state.total);
+      return;
+    }
+
     if (tabOf(state.tab).src === 'fb') {
       var ft = tabOf(state.tab);
       if (!state.list.length) {
@@ -672,6 +728,50 @@
     var s = findItem(state.selectedId);
     if (!s) {
       pane.innerHTML = '<div class="detail-empty">从左侧选择一条</div>';
+      return;
+    }
+
+    if (tabOf(state.tab).src === 'user') {
+      pane.innerHTML =
+        '<div class="detail">' +
+          '<div class="detail-head">' +
+            '<h2 class="detail-title">' + esc(s.nickname || '（无昵称）') + '</h2>' +
+            '<span class="pill ' + (s.banned ? 'rejected' : 'approved') + '">' +
+              (s.banned ? '已封禁' : '正常') + '</span>' +
+          '</div>' +
+          '<div class="detail-sub">注册于 ' + esc(s.createdAt || '—') + '</div>' +
+          '<div class="section"><div class="section-label">基本信息</div>' +
+            '<dl class="kv">' +
+              '<dt>用户 ID</dt><dd class="mono">' + esc(s.id) + '</dd>' +
+              '<dt>openid</dt><dd class="mono">' + esc(s.openidMask || '—') + '</dd>' +
+              '<dt>等级 / 积分</dt><dd>Lv.' + esc(String(s.level || 1)) + ' · ' +
+                esc(String(s.score || 0)) + ' 分</dd>' +
+              '<dt>代币</dt><dd>' + esc(String(s.coins || 0)) + '</dd>' +
+            '</dl></div>' +
+          '<div class="section"><div class="section-label">代币管理</div>' +
+            '<div class="tip">直接设置当前代币数量；设置后不会再触发首次打开钱包的补发。</div>' +
+            '<div class="coin-edit">' +
+              '<input id="fCoins" class="coin-input" type="number" min="0" step="1" ' +
+                'value="' + esc(String(s.coins || 0)) + '">' +
+              '<button class="btn primary" data-act="coins">保存代币</button>' +
+            '</div>' +
+          '</div>' +
+          (s.banned
+            ? '<div class="section"><div class="section-label">封禁记录</div>' +
+                '<dl class="kv">' +
+                  '<dt>封禁时间</dt><dd>' + esc(s.bannedAt || '—') + '</dd>' +
+                  '<dt>原因</dt><dd>' + esc(s.banReason || '（未填）') + '</dd>' +
+                '</dl>' +
+                '<div class="tip">封禁期间：所有需要登录的接口返回 401，微信登录被直接拦下；' +
+                  '浏览点位 / 图鉴不受影响。</div>' +
+              '</div>'
+            : '') +
+          '<div class="detail-actions">' +
+            (s.banned
+              ? '<button class="btn primary" data-act="unban">解除封禁</button>'
+              : '<button class="btn danger" data-act="ban">封禁账号</button>') +
+          '</div>' +
+        '</div>';
       return;
     }
 
@@ -791,9 +891,39 @@
   function openModal(mode, item) {
     state.mode = mode;
     $('modal').classList.remove('hidden');
+    if (mode === 'ban') {
+      $('mTitle').textContent = '封禁账号';
+      $('mDesc').innerHTML =
+        '封禁后该账号<b>所有需要登录的功能都不能用</b>，微信登录也会被直接拦下；' +
+        '浏览点位 / 图鉴不受影响。可随时解封。';
+      $('mOk').textContent = '确认封禁';
+      $('mOk').className = 'btn danger';
+      $('mBody').innerHTML =
+        '<div class="field"><label>对象</label>' +
+          '<div class="note-box">' + esc(item.nickname || '（无昵称）') +
+          ' <span class="mono">' + esc(item.id) + '</span></div></div>' +
+        '<div class="field"><label>封禁原因</label>' +
+          '<textarea id="fBanReason" maxlength="200" placeholder="如：发布违规内容"></textarea>' +
+          '<div class="tip">只记在后台给管理员看，不会下发给用户端</div></div>';
+      setTimeout(function () { var r = $('fBanReason'); if (r) r.focus(); }, 30);
+      return;
+    }
+    if (mode === 'unban') {
+      $('mTitle').textContent = '解除封禁';
+      $('mDesc').textContent = '解封后该账号恢复正常，可以重新登录使用。';
+      $('mOk').textContent = '确认解封';
+      $('mOk').className = 'btn primary';
+      $('mBody').innerHTML =
+        '<div class="field"><label>对象</label>' +
+          '<div class="note-box">' + esc(item.nickname || '（无昵称）') +
+          ' <span class="mono">' + esc(item.id) + '</span></div></div>';
+      return;
+    }
     if (mode === 'approve') {
       $('mTitle').textContent = '通过并发布';
-      $('mDesc').textContent = '发布后将作为官方点位出现在小程序点位列表里。';
+      $('mDesc').innerHTML =
+        '<b>这是历史流程</b>：用户上传现在只存成「仅自己可见」的私人记录，' +
+        '发布就等于把对方的私人记录公开到小程序点位上。确认前请先跟对方确认。';
       $('mOk').textContent = '确认发布';
       $('mOk').className = 'btn primary';
       $('mBody').innerHTML =
@@ -1014,10 +1144,187 @@
     }
   }
 
+  /* ============ 官方新建点位（不经用户投稿） ============ */
+  function openCreate() {
+    state.mode = 'create';
+    state.newPhotoIds = [];
+    state.newPhotoPreviews = [];
+    $('mTitle').textContent = '新建官方点位';
+    $('mDesc').textContent = '发布后立刻出现在小程序的点位列表里。带 * 的必填。';
+    $('mOk').textContent = '发布';
+    $('mOk').className = 'btn primary';
+    $('mBody').innerHTML =
+      '<div class="field"><label>点位名称<span class="req">*</span></label>' +
+        '<input id="fName" maxlength="64" placeholder="如 青岛·××赶海园"></div>' +
+      '<div class="two-col">' +
+        '<div class="field"><label>所属城市<span class="req">*</span></label>' +
+          '<input id="fCity" maxlength="32" placeholder="如 青岛"></div>' +
+        '<div class="field"><label>所属区</label>' +
+          '<input id="fDistrict" maxlength="32" placeholder="如 崂山区"></div>' +
+      '</div>' +
+      '<div class="two-col">' +
+        '<div class="field"><label>纬度 lat<span class="req">*</span></label>' +
+          '<input id="fLat" placeholder="如 36.09168"><div class="tip" id="geoTip"></div></div>' +
+        '<div class="field"><label>经度 lng<span class="req">*</span></label>' +
+          '<input id="fLng" placeholder="如 120.46801"></div>' +
+      '</div>' +
+      '<div class="field">' +
+        '<button class="btn" type="button" id="geoFillBtn">按坐标反查城市 / 区</button>' +
+        '<div class="tip">填好经纬度点一下，自动补上面的城市和区</div></div>' +
+      '<div class="field"><label>热度</label>' +
+        '<input id="fHeat" type="number" placeholder="默认 40">' +
+        '<div class="tip">数字越大在点位列表里排得越前，官方点位多在 40~100</div></div>' +
+      '<div class="field"><label>点位简介</label>' +
+        '<textarea id="fDesc" maxlength="2000"></textarea>' +
+        '<div class="tip">展示在点位详情里，可留空；不要填地址</div></div>' +
+      '<div class="field"><label>观察提示</label>' +
+        '<textarea id="fObserve" maxlength="2000"></textarea>' +
+        '<div class="tip">点位详情「可能遇到」下面那句话</div></div>' +
+      '<div class="field"><label>照片（最多 3 张，可留空）</label>' +
+        '<input type="file" id="fPhotos" accept="image/*" multiple>' +
+        '<div class="photo-pick" id="fPhotoPick"></div>' +
+        '<div class="tip">选完自动上传；第一张作为封面</div></div>';
+    $('modal').classList.remove('hidden');
+    $('fPhotos').addEventListener('change', onPickPhotos);
+    $('geoFillBtn').addEventListener('click', geoFill);
+    $('fPhotoPick').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-del]');
+      if (!b) return;
+      var i = Number(b.dataset.del);
+      state.newPhotoIds.splice(i, 1);
+      state.newPhotoPreviews.splice(i, 1);
+      renderPhotoPick();
+    });
+  }
+
+  /** 选图 → 逐张传到 /admin/uploads → 攒 uploadId，发布时一起提交 */
+  async function onPickPhotos(e) {
+    var files = Array.prototype.slice.call(e.target.files || []);
+    e.target.value = ''; // 清空，允许再选同一张
+    if (!files.length) return;
+    var room = 3 - state.newPhotoIds.length;
+    if (room <= 0) { toast('最多 3 张'); return; }
+    files = files.slice(0, room);
+    for (var i = 0; i < files.length; i++) {
+      try {
+        var d = await adminUpload(files[i]);
+        state.newPhotoIds.push(d.uploadId);
+        state.newPhotoPreviews.push(URL.createObjectURL(files[i]));
+      } catch (err) {
+        if (err.status === 401) { closeModal(); return authLost(); }
+        toast(err.message || '上传失败');
+        break;
+      }
+    }
+    renderPhotoPick();
+  }
+
+  async function adminUpload(file) {
+    var fd = new FormData();
+    fd.append('scene', 'spot');
+    fd.append('file', file);
+    // 不要手设 Content-Type：浏览器要自己带 multipart 的 boundary
+    var res = await fetch(API + '/admin/uploads', {
+      method: 'POST',
+      headers: { 'X-Admin-Token': token() },
+      body: fd
+    });
+    var body = null;
+    try { body = await res.json(); } catch (e2) { /* 非 JSON */ }
+    if (!body || body.code !== 0) {
+      var err = new Error((body && body.message) || ('上传失败 (' + res.status + ')'));
+      err.status = res.status;
+      throw err;
+    }
+    return body.data;
+  }
+
+  function renderPhotoPick() {
+    var box = $('fPhotoPick');
+    if (!box) return;
+    box.innerHTML = state.newPhotoPreviews.map(function (src, i) {
+      return '<span class="photo-pick-item"><img src="' + src + '" alt="">' +
+        '<button type="button" class="photo-pick-del" data-del="' + i + '">删除</button></span>';
+    }).join('');
+  }
+
+  /** 按经纬度反查城市 / 区，自动补进表单 */
+  async function geoFill() {
+    var tip = $('geoTip');
+    var lat = parseFloat($('fLat').value);
+    var lng = parseFloat($('fLng').value);
+    if (isNaN(lat) || isNaN(lng)) { toast('请先填经纬度'); return; }
+    if (tip) tip.innerHTML = '<span class="spinner-xs"></span>正在识别…';
+    try {
+      var geo = await api('/geo/city?lat=' + lat + '&lng=' + lng);
+      if (geo && geo.city) $('fCity').value = geo.city;
+      if (geo && geo.district) $('fDistrict').value = geo.district;
+      if (tip) tip.textContent = geo && geo.city ? '已按坐标填好城市 / 区' : '没识别出城市，请手动填写';
+    } catch (e) {
+      if (tip) tip.textContent = '';
+      if (e.status === 401) return authLost();
+      toast(e.message || '反查失败');
+    }
+  }
+
   async function submitModal() {
     if (state.busy) return;
     var item = findItem(state.selectedId);
+    if (state.mode === 'create') {
+      var cName = ($('fName').value || '').trim();
+      var cCity = ($('fCity').value || '').trim();
+      var cLat = parseFloat($('fLat').value);
+      var cLng = parseFloat($('fLng').value);
+      if (!cName) { toast('请填写点位名称'); $('fName').focus(); return; }
+      if (!cCity) { toast('请填写所属城市'); $('fCity').focus(); return; }
+      if (isNaN(cLat) || isNaN(cLng)) { toast('请填写经纬度'); $('fLat').focus(); return; }
+      var heatRaw = ($('fHeat').value || '').trim();
+      state.busy = true;
+      try {
+        var created = await api('/admin/spots', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: cName,
+            city: cCity,
+            district: ($('fDistrict').value || '').trim(),
+            lat: cLat,
+            lng: cLng,
+            description: ($('fDesc').value || '').trim(),
+            observeHint: ($('fObserve').value || '').trim(),
+            heat: heatRaw ? Number(heatRaw) : null,
+            photoUploadIds: state.newPhotoIds
+          })
+        });
+        toast('已发布：' + (created && created.name ? created.name : cName));
+        closeModal();
+        await refresh();
+      } catch (e) {
+        state.busy = false;
+        if (e.status === 401) { closeModal(); return authLost(); }
+        toast(e.message);
+      }
+      return;
+    }
     if (!item) return;
+    if (state.mode === 'ban' || state.mode === 'unban') {
+      var act = state.mode === 'ban' ? 'ban' : 'unban';
+      var pay = { reason: act === 'ban' ? ($('fBanReason').value || '').trim() : '' };
+      state.busy = true;
+      try {
+        await api('/admin/users/' + encodeURIComponent(item.id) + '/' + act, {
+          method: 'POST',
+          body: JSON.stringify(pay)
+        });
+        toast(act === 'ban' ? '已封禁：' + (item.nickname || item.id) : '已解封');
+        closeModal();
+        await refresh();
+      } catch (e) {
+        state.busy = false;
+        if (e.status === 401) { closeModal(); return authLost(); }
+        toast(e.message);
+      }
+      return;
+    }
     if (state.mode === 'approve') {
       var city = ($('fCity').value || '').trim();
       if (!city) { toast('请填写所属城市'); $('fCity').focus(); return; }
@@ -1091,6 +1398,7 @@
   $('gateInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') enter(); });
   $('logoutBtn').addEventListener('click', function () { _token = ''; showGate(''); });
   $('refreshBtn').addEventListener('click', function () { refresh(); });
+  $('newSpotBtn').addEventListener('click', function () { openCreate(); });
   $('mCancel').addEventListener('click', closeModal);
   $('mOk').addEventListener('click', submitModal);
   $('modal').addEventListener('click', function (e) { if (e.target === $('modal')) closeModal(); });
@@ -1151,8 +1459,30 @@
     if (b.dataset.act === 'handle') { markFeedback(item); return; }
     if (b.dataset.act === 'reply') { submitReply(item); return; }
     if (b.dataset.act === 'goto-spot') { gotoSpot(item); return; }
+    if (b.dataset.act === 'coins') { saveCoins(item); return; }
     openModal(b.dataset.act, item);
   });
+
+  async function saveCoins(item) {
+    var el = $('fCoins');
+    var raw = (el && el.value || '').trim();
+    if (!/^\d+$/.test(raw)) { toast('请输入 0 或正整数'); return; }
+    var coins = Number(raw);
+    if (coins > 1000000) { toast('代币不能超过 1000000'); return; }
+    try {
+      var updated = await api('/admin/users/' + encodeURIComponent(item.id) + '/coins', {
+        method: 'POST',
+        body: JSON.stringify({ coins: coins })
+      });
+      item.coins = updated.coins;
+      toast('代币已设置为 ' + updated.coins);
+      renderList();
+      renderDetail();
+    } catch (e) {
+      if (e.status === 401) return authLost();
+      toast(e.message);
+    }
+  }
 
   /* ================= 启动 ================= */
   // 不持久化令牌：每次进来都从登录页开始

@@ -278,6 +278,38 @@ class RejectSubmissionRequest(BaseModel):
     reason: str | None = None
 
 
+class BanUserRequest(BaseModel):
+    """封禁一个用户账号。
+
+    reason 只记在库里给管理员看，**不下发给用户端**（列表和接口都不返回给小程序）。
+    """
+
+    reason: str | None = None
+
+
+class CreateSpotRequest(BaseModel):
+    """管理后台**官方新建**一个宝藏点位（不经过用户投稿）。
+
+    用户上传改成了「仅自己可见」的私人记录之后，官方点位只能由后台自己录。
+    名称 / 城市 / 坐标必填；照片可选，先调 POST /admin/uploads 拿 uploadId 再传这里。
+    """
+
+    name: str
+    city: str
+    lat: float
+    lng: float
+    district: str | None = None
+    description: str | None = None
+    observeHint: str | None = None
+    openTime: str | None = None
+    ageHint: str | None = None
+    safetyTags: list | None = None
+    heat: int | None = None
+    source: str | None = None
+    # 最多 3 张，顺序即展示顺序；第一张会同时写进 cover_key
+    photoUploadIds: list[str] | None = None
+
+
 class EditSpotRequest(BaseModel):
     """编辑已发布的官方点位。
 
@@ -291,3 +323,37 @@ class EditSpotRequest(BaseModel):
     description: str | None = None
     observeHint: str | None = None
     heat: int | None = None
+
+
+class AquariumResidentCreate(BaseModel):
+    """新增潮池住客。objectKey 来自抠图/上传接口；老数据可以用 uploadId 反查。"""
+
+    name: str = "小生物"
+    kind: str = "fish"
+    objectKey: str | None = None
+    uploadId: str | None = None
+    sourceUploadId: str | None = None
+    speciesName: str | None = None
+    aspect: float = 1.0
+    scale: float = 1.0
+    rotation: int = 0
+    baseFlip: bool = False
+
+
+class AquariumResidentImport(BaseModel):
+    items: list[AquariumResidentCreate] = []
+
+
+class AquariumSettingsUpdate(BaseModel):
+    theme: str | None = None  # day|night
+    landscape: bool | None = None
+    backgroundKey: str | None = None  # 传空字符串表示恢复默认背景
+
+
+class AquariumResidentUpdate(BaseModel):
+    scale: float | None = None
+    rotation: int | None = None
+
+
+class AdminSetCoinsRequest(BaseModel):
+    coins: int

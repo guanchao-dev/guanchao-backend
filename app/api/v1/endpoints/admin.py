@@ -6,18 +6,29 @@
 """
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.endpoints.uploads import (
+    ALLOWED_TYPES,
+    EXT_CONTENT_TYPES,
+    MAX_SIZE,
+    SCENES,
+    _object_key,
+    _sniff_ext,
+)
 from app.core.deps import require_admin
-from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
+from app.core.exceptions import BadRequestError, ConflictError, InvalidFileError, NotFoundError
 from app.core.response import ok, paginated
 from app.core.utils import SHANGHAI_TZ, new_id, to_shanghai_iso
 from app.db.base import get_db
-from app.db.models import Feedback, Spot, SpotHarmonics, UserSpot
+from app.db.models import Feedback, Spot, SpotHarmonics, Upload, User, UserSpot
 from app.schemas import (
+    AdminSetCoinsRequest,
     ApproveSubmissionRequest,
+    BanUserRequest,
+    CreateSpotRequest,
     EditSpotRequest,
     HandleFeedbackRequest,
     RejectSubmissionRequest,
@@ -25,6 +36,7 @@ from app.schemas import (
 )
 from app.services import advice_prewarm, amap, storage
 from app.services.content_safety import assert_text_safe
+from app.services.image import compress_image
 from app.services.tide_predict import harmonics_from_coords
 
 router = APIRouter(tags=["admin"], dependencies=[Depends(require_admin)])
@@ -34,6 +46,9 @@ _VALID_STATUS = {"pending", "approved", "rejected", "all"}
 # 发布到 spots 时新点位的默认热度：40 = 文档里的「其他（平列）」档。
 # 用 0 会让新点位沉到 GET /spots 列表最底，几乎没人看得到；管理员可在通过时覆盖。
 _DEFAULT_HEAT = 40
+
+# 一个点位最多几张照片（与前台投稿 POST /spots 的上限保持一致）
+_MAX_PHOTOS = 3
 
 
 def _today() -> str:
@@ -465,3 +480,221 @@ async def generate_advice(
     except ValueError:
         raise BadRequestError("date 格式应为 YYYY-MM-DD") from None
     return ok(await advice_prewarm.generate_for_date(date_str, force=bool(force)))
+
+
+@router.post("/admin/uploads")
+async def admin_upload(
+    scene: str = Form("spot"),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """管理端传图（官方点位的照片）。
+
+    跟小程序用的 `POST /uploads` 是同一套压缩 + 存储，区别只在归属：
+    那条按用户身份记账（user:{id} / client:{id}），管理页没有用户身份，
+    这里固定记 `admin`。返回的 uploadId 传给 POST /admin/spots 即可。
+    """
+    if scene not in SCENES:
+        raise InvalidFileError("scene 不合法")
+    data = await file.read()
+    if len(data) > MAX_SIZE:
+        raise InvalidFileError("图片不能超过 5MB")
+    ext = ALLOWED_TYPES.get(file.content_type or "") or _sniff_ext(data) or ""
+    if not ext:
+        raise InvalidFileError("仅支持 jpg/png/webp")
+    # 统一压缩：缩到最长边 1280px、转 JPEG，跟前端上传一致
+    data, ext = compress_image(data)
+    upload_id = new_id("up")
+    object_key = _object_key("admin", scene, upload_id, ext)
+    await storage.save_bytes(object_key, data)
+    db.add(
+        Upload(
+            id=upload_id,
+            user_id=None,
+            owner_id="admin",
+            scene=scene,
+            content_type=EXT_CONTENT_TYPES.get(ext, "image/jpeg"),
+            ext=ext,
+            object_key=object_key,
+            status="approved",
+        )
+    )
+    await db.commit()
+    return ok({"uploadId": upload_id, "objectKey": object_key, "status": "approved"})
+
+
+@router.post("/admin/spots")
+async def create_spot(body: CreateSpotRequest, db: AsyncSession = Depends(get_db)):
+    """**官方新建**一个宝藏点位（不经过用户投稿）。
+
+    发布后立刻出现在小程序的 GET /spots 里。照片可选（最多 3 张，先调
+    POST /admin/uploads 拿 uploadId）；坐标必填，会按坐标算出这个点位自己的
+    潮汐调和常数 —— 跟「审核通过发布」那条走的是同一套。
+    """
+    name = (body.name or "").strip()
+    city = (body.city or "").strip()
+    district = (body.district or "").strip()
+    if not name:
+        raise BadRequestError("请填写点位名称")
+    if not city:
+        raise BadRequestError("请填写所属城市")
+    if body.lat is None or body.lng is None:
+        raise BadRequestError("请填写坐标（经度 / 纬度）")
+    if not (-90 <= body.lat <= 90 and -180 <= body.lng <= 180):
+        raise BadRequestError("坐标不合法")
+    observe_hint = (body.observeHint or "").strip()
+    description = (body.description or "").strip()
+    assert_text_safe(name, city, district, observe_hint, description)
+
+    # 照片只认管理端自己传的：别把小程序用户的私有图片挂到官方点位上
+    photo_keys: list[str] = []
+    for uid in (body.photoUploadIds or [])[:_MAX_PHOTOS]:
+        up = await db.get(Upload, uid)
+        if up is None or up.owner_id != "admin" or up.status != "approved" or not up.object_key:
+            raise NotFoundError("图片不存在或尚未上传完成")
+        photo_keys.append(up.object_key)
+
+    spot = Spot(
+        # 同审核发布：前缀用 spot_z，避免抢走 home.py::_resolve_spot 的默认点位
+        id=new_id("spot_z"),
+        name=name[:64],
+        city=city[:32],
+        district=district[:32],
+        # 第一张同时写 cover_key：兼容只认单图 cover_key 的老逻辑
+        cover_key=(photo_keys[0] if photo_keys else "")[:255],
+        photo_keys=photo_keys,
+        open_time=(body.openTime or "").strip()[:128],
+        age_hint=(body.ageHint or "").strip()[:128],
+        safety_tags=body.safetyTags or [],
+        observe_hint=observe_hint,
+        description=description,
+        gear_list=[],
+        source=(body.source or "追潮记团队整理").strip()[:255],
+        reviewed_at=_today(),
+        lat=float(body.lat),
+        lng=float(body.lng),
+        heat=body.heat if body.heat is not None else _DEFAULT_HEAT,
+    )
+    db.add(spot)
+
+    # 按坐标插值出调和常数存下来（潮汐接口优先用它）；超出网格覆盖范围就跳过，
+    # 潮汐那边会自动就近兜底 —— 与 approve_submission 一致。
+    harmonics = harmonics_from_coords(spot.lat, spot.lng)
+    if harmonics:
+        db.add(
+            SpotHarmonics(
+                spot_id=spot.id,
+                data={k: [v[0], v[1]] for k, v in harmonics.items()},
+                source="FES2022b-interp",
+                lat=spot.lat,
+                lng=spot.lng,
+            )
+        )
+
+    await db.commit()
+    return ok({"spotId": spot.id, "name": spot.name, "photoCount": len(photo_keys)})
+
+
+def _user_item(u: User) -> dict:
+    """后台用户列表 / 封禁结果统一用这个结构。"""
+    return {
+        "id": u.id,
+        "nickname": u.nickname,
+        "avatarUrl": f"/users/{u.id}/avatar" if u.avatar_key else "",
+        "level": u.level,
+        "score": u.score,
+        "coins": u.coins or 0,
+        "banned": bool(u.banned),
+        "banReason": u.ban_reason or "",
+        "bannedAt": u.banned_at or "",
+        "createdAt": to_shanghai_iso(u.created_at),
+        # openid 是微信侧的内部标识，只给管理员看掩码版
+        "openidMask": (u.openid[:6] + "****") if u.openid else "",
+    }
+
+
+@router.get("/admin/users")
+async def list_users(
+    keyword: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    pageSize: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """用户列表。可按昵称或用户 id 搜，按注册时间倒序。
+
+    openid 只返回掩码（前 6 位），够定位、不泄露完整标识。
+    """
+    q = select(User)
+    kw = (keyword or "").strip()
+    if kw:
+        q = q.where(
+            or_(
+                User.nickname.contains(kw, autoescape=True),
+                User.id.contains(kw, autoescape=True),
+            )
+        )
+    total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar() or 0
+    rows = (
+        await db.execute(
+            q.order_by(User.created_at.desc(), User.id)
+            .offset((page - 1) * pageSize)
+            .limit(pageSize)
+        )
+    ).scalars().all()
+    return ok(paginated([_user_item(u) for u in rows], page, pageSize, total))
+
+
+@router.post("/admin/users/{user_id}/ban")
+async def ban_user(
+    user_id: str,
+    body: BanUserRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """封禁账号。
+
+    生效范围（见 app/core/deps.py）：所有需要登录的接口一律 401，
+    微信登录也会在发 token 之前被拦下。浏览类接口不受影响（降级成游客）。
+    """
+    u = await db.get(User, user_id)
+    if u is None:
+        raise NotFoundError("用户不存在")
+    reason = (body.reason or "").strip()
+    if reason:
+        assert_text_safe(reason)
+    u.banned = True
+    u.ban_reason = reason[:255]
+    u.banned_at = _today()
+    await db.commit()
+    return ok(_user_item(u))
+
+
+@router.post("/admin/users/{user_id}/unban")
+async def unban_user(user_id: str, db: AsyncSession = Depends(get_db)):
+    """解封账号，恢复登录与全部功能。原因一并清空。"""
+    u = await db.get(User, user_id)
+    if u is None:
+        raise NotFoundError("用户不存在")
+    u.banned = False
+    u.ban_reason = ""
+    u.banned_at = ""
+    await db.commit()
+    return ok(_user_item(u))
+
+
+@router.post("/admin/users/{user_id}/coins")
+async def set_user_coins(
+    user_id: str,
+    body: AdminSetCoinsRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """后台直接设置用户代币数量。设置后标记 coins_seeded，避免钱包再补发。"""
+    u = await db.get(User, user_id)
+    if u is None:
+        raise NotFoundError("用户不存在")
+    coins = int(body.coins)
+    if coins < 0 or coins > 1_000_000:
+        raise BadRequestError("代币数量需在 0 ~ 1000000 之间")
+    u.coins = coins
+    u.coins_seeded = True
+    await db.commit()
+    return ok(_user_item(u))
