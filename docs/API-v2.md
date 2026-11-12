@@ -952,3 +952,241 @@ https://www.blueakaiwu.cn/api/v1/static/assets/badges/crab-crown.png?v=2
 > 昵称在接口里的位置：`/auth/wechat-login`、`/auth/me`、`/achievements/friends`、
 > `/achievements/leaderboard`、社区作者卡都返回 `nickname` / `user.nickname`。
 > 用户改自己的名字走 `POST /me/nickname`（1~20 字，过内容安全校验）。
+
+---
+
+## 十六、潮池、图鉴分类与卡包抽卡（2026-11-12）
+
+这一轮新增了潮池账号同步、图鉴三个新分类、代币和抽卡。下面按模块列接口。
+
+### 16.1 数据表和字段变化
+
+| 表 / 字段 | 说明 |
+|---|---|
+| `aquarium_residents` | 潮池生物。新增 `scale`（0.5~1.8）、`rotation`（-180~180）、`species_name` |
+| `aquarium_settings` | 每个用户一行：`background_key`、`theme`（day/night）、`landscape` |
+| `aquarium_species_rewards` | 新物种发币去重：`user_id + species_key` 唯一 |
+| `users.coins` / `users.coins_seeded` | 代币余额 / 是否已做过首次补发 |
+| `uploads.used_at` / `used_resident_id` | 申诉通过的来源图是否已经加入过潮池 |
+| `species.category` | 新增 `physical`、`tech`、`other_marine`；原 shell/crab/algae/fish/other 归为「赶海生物」 |
+
+图鉴新增 15 条内容（每类 5 条），已在启动时由 `seed.py` 补齐：
+
+- 物理海洋：潮汐、洋流、海浪、温跃层、海水盐度
+- 海洋科技：Argo 浮标、水下机器人、多波束声呐、海洋卫星、人工鱼礁
+- 其他海洋生物：鲸、海龟、海鸟、深海热液、浮游生物
+
+### 16.2 图鉴分类
+
+`GET /encyclopedia?category=forage|physical|tech|other_marine`
+
+- `forage` 是伪分类，等价于原来的 `shell/crab/algae/fish/other` 并集。
+- 其它分类直接按 `species.category` 过滤。
+- 详情 `GET /encyclopedia/{id}` 新增返回 `summary`；`category` 原样返回。
+
+前端一级分类：赶海生物 / 物理海洋 / 海洋科技 / 其他海洋生物 / 我的收藏；赶海生物下保留贝类/蟹类/海藻/鱼类/其他二级筛选。
+
+### 16.3 潮池生物同步
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/aquarium/residents` | 当前用户的潮池生物，按创建时间升序 |
+| POST | `/aquarium/residents` | 新增生物 |
+| PUT | `/aquarium/residents/{id}` | 修改 `scale` / `rotation` |
+| DELETE | `/aquarium/residents/{id}` | 删除单个生物 |
+| DELETE | `/aquarium/residents` | 清空潮池 |
+| POST | `/aquarium/residents/import` | 本机旧住客迁移（最多 30 条） |
+
+`POST /aquarium/residents` 请求体：
+
+```json
+{
+  "name": "沙蟹",
+  "kind": "crab",
+  "objectKey": "private/user_xxx/aquarium/up_xxx.png",
+  "uploadId": "up_xxx",
+  "sourceUploadId": "up_appeal_xxx",
+  "speciesName": "招潮蟹",
+  "aspect": 0.72,
+  "scale": 1.0,
+  "rotation": 0,
+  "baseFlip": false
+}
+```
+
+- `objectKey` 和 `uploadId` 二选一；图片必须在当前用户自己的 `private/user_{id}/` 下。
+- `sourceUploadId` 只在「从申诉记录加入」时传；后端会标记来源图 `used_at`，第二次加入返回 `400 这张图片已经加入过潮池`。
+- `speciesName` 优先用 AI 审核返回的物种名；同一账号同一物种只发一次代币。
+- `scale` 默认 1.0，范围 0.5~1.8；`rotation` 默认 0，范围 -180~180。
+
+返回在生物字段之外增加：
+
+```json
+{ "coinsAwarded": 20, "coins": 120 }
+```
+
+`coinsAwarded` 本次新物种奖励（0 或 20），`coins` 当前余额。
+
+生物字段：
+
+```json
+{
+  "id": "ar_xxx",
+  "name": "沙蟹",
+  "kind": "crab",
+  "url": "https://.../sticker.png",
+  "objectKey": "private/user_xxx/aquarium/xxx.png",
+  "aspect": 0.72,
+  "scale": 1.0,
+  "rotation": 0,
+  "speciesName": "招潮蟹",
+  "baseFlip": false,
+  "createdAtMs": 1760000000000,
+  "createdAt": "2026-11-12T10:00:00+08:00"
+}
+```
+
+`PUT /aquarium/residents/{id}` 请求体只接受：
+
+```json
+{ "scale": 1.2, "rotation": 90 }
+```
+
+### 16.4 潮池外观
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/aquarium/settings` | 返回背景、主题、横竖版 |
+| PUT | `/aquarium/settings` | 修改 `theme` / `landscape` / `backgroundKey` |
+| POST | `/aquarium/background` | multipart 上传自定义背景，先审后存 |
+
+`GET /aquarium/settings` 返回：
+
+```json
+{
+  "backgroundKey": "private/user_xxx/aquarium-bg/bg_xxx.jpg",
+  "backgroundUrl": "https://...",
+  "theme": "day",
+  "landscape": false
+}
+```
+
+`POST /aquarium/background` 成功：
+
+```json
+{ "ok": true, "status": "approved", "uploadId": "bg_xxx", "backgroundKey": "...", "backgroundUrl": "..." }
+```
+
+被拒：
+
+```json
+{ "ok": false, "status": "rejected", "rejectReason": "含二维码", "uploadId": "bg_xxx" }
+```
+
+背景审核只查**合法合规**，不要求是海洋/风景：色情、暴力、违法违禁、赌博诈骗、二维码/联系方式等会被拒。
+
+`PUT /aquarium/settings` 的 `backgroundKey` 传空字符串表示恢复默认背景。
+
+### 16.5 抠图接口的 `engine`
+
+`POST /aquarium/cutout` 新增表单字段 `engine`：
+
+- `local`（默认）：本地 u2net
+- `ai`：千问图像编辑精修，按张计费，每天 20 次
+
+`POST /aquarium/cutout/{upload_id}?engine=ai` 也支持 AI 精修。
+
+`POST /aquarium/cutout` 返回新增 `engine` 字段。AI 精修失败不会静默回退本地，前端保留原贴纸即可。
+
+### 16.6 申诉记录
+
+`GET /uploads/mine?scene=aquarium&appealedOnly=1`
+
+只返回用户真正点过申诉的记录（`appealed_at != ""`），并在原字段之外增加：
+
+```json
+{ "usedAt": "2026-11-12T10:00:00Z" }
+```
+
+前端展示规则：
+
+| 状态 | 展示 | 操作 |
+|---|---|---|
+| `appealed` | 复核中 | 无 |
+| `approved` + `usedAt` 为空 | 已通过 | 「加入潮池」 |
+| `approved` + `usedAt` 非空 | 已加入潮池 | 无，不可二次加入 |
+| `rejected` | 未通过 | 无 |
+
+### 16.7 代币和抽卡
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/wallet` | 当前代币余额 |
+| POST | `/gacha/draw` | 花 100 代币抽一个卡包 |
+
+`GET /wallet`：
+
+```json
+{ "coins": 120 }
+```
+
+第一次打开钱包时：补发历史成就代币（按稀有度）并送 100 起始代币；之后只返回余额。管理员手动设置过代币的用户不会再触发补发。
+
+`POST /gacha/draw` 不传参数，成功：
+
+```json
+{
+  "coins": 20,
+  "cost": 100,
+  "cards": [
+    { "id": "sp_rov", "name": "水下机器人", "category": "tech", "summary": "...", "coverUrl": "" }
+  ],
+  "remaining": 12
+}
+```
+
+- 每包最多 3 张，只抽物理海洋/海洋科技/其他海洋生物中**未点亮**的条目。
+- 抽到即写入 `species_unlocks`，图鉴自动点亮。
+- 代币不足返回 400「代币不够…」；卡池集齐返回 400「这个卡包已经集齐了」。
+
+代币来源：
+
+| 来源 | 代币 |
+|---|---|
+| 潮池加入新物种 | +20，每个账号每个物种一次 |
+| 成就 common | +20 |
+| 成就 rare | +50 |
+| 成就 epic | +100 |
+| 成就 legendary | +200 |
+| 成就 hidden | +80 |
+| 首次打开钱包 | +100 |
+
+### 16.8 管理后台设置代币
+
+`GET /admin/users` 的用户项新增 `coins`。
+
+`POST /admin/users/{user_id}/coins`
+
+```json
+{ "coins": 500 }
+```
+
+范围 0~1,000,000。设置后会标记 `coins_seeded=true`，避免钱包再次补发。
+
+### 16.9 注销账号
+
+`POST /me/delete` 现在会清理这些新表后再删用户，避免外键 500：
+
+- `aquarium_residents`
+- `aquarium_settings`
+- `aquarium_species_rewards`
+- `species_unlocks`
+- `trash_guesses`
+- `user_spots` / `checkin_sessions` / `report_checkins` / `spot_visits`
+
+### 16.10 前端注意
+
+- 新页面：`pages/aquarium-audit/aquarium-audit`、`pages/card-pack/card-pack`，已在 `app.json` 注册。
+- `utils/http.ts` 新增 `put`。
+- 图鉴新条目暂无封面，前端用分类色块占位；补图时给对应物种加 `cover_key`。
+- 卡包入口只在首页；图鉴和「我的」页入口已删。
